@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
     const key = Deno.env.get("ANTHROPIC_API_KEY");
     if (!key) return json({ error: "Chýba ANTHROPIC_API_KEY (supabase secrets)." });
-    const aiModel = Deno.env.get("AI_MODEL") || "claude-3-5-sonnet-20241022";
+    const aiModel = Deno.env.get("AI_MODEL") || "claude-haiku-4-5";
 
     const attrList = attrs.map((a: any) => {
       let line = `- ${a.key} (${a.label}${a.unit ? ", jednotka " + a.unit : ""}, typ ${a.type})`;

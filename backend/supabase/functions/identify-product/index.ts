@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 async function visionExtract(images: string[]) {
   const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) throw new Error("Chýba ANTHROPIC_API_KEY (nastav cez supabase secrets set).");
-  const model = Deno.env.get("AI_MODEL") || "claude-3-5-sonnet-20241022";
+  const model = Deno.env.get("AI_MODEL") || "claude-haiku-4-5";
   const content: any[] = images.map(toImageBlock);
   content.push({ type: "text", text: PROMPT });
   const res = await fetch("https://api.anthropic.com/v1/messages", {
