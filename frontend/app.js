@@ -1505,12 +1505,13 @@ function shipQuickTrack(){const t=prompt("Sledovacie číslo (napr. UPS):");if(!
 // prijatie zásielky na sklad -> vytvorí skladové položky z obsahu
 async function shipReceive(id){
   if(!confirm("Prijať zásielku na sklad a vytvoriť skladové položky z obsahu?"))return;
-  const {data:its}=await sb.from("shipment_items").select("product_id,quantity").eq("shipment_id",id);
+  const {data:its}=await sb.from("shipment_items").select("product_id,quantity,serial").eq("shipment_id",id);
   if(!its||!its.length){alert("Zásielka nemá položky (obsah). Doplň produkty v úprave zásielky.");return;}
   const wh=DATA.warehouses[0]?DATA.warehouses[0].id:null;
   for(const it of its){if(!it.product_id)continue;
-    const {data:lot}=await sb.from("stock_lots").insert({product_id:it.product_id,warehouse_id:wh,track:"bulk",quantity:it.quantity||1,status:"skladom",state:"new",shipment_id:id}).select("id").single();
-    if(lot)await sb.from("stock_movements").insert({type:"prijem",product_id:it.product_id,lot_id:lot.id,quantity:it.quantity||1,warehouse_id:wh,via:"zasielkou"});
+    const unit=!!it.serial;const qty=unit?1:(it.quantity||1);
+    const {data:lot}=await sb.from("stock_lots").insert({product_id:it.product_id,warehouse_id:wh,track:unit?"unit":"bulk",quantity:qty,serial:it.serial||null,status:"skladom",state:"new",shipment_id:id}).select("id").single();
+    if(lot)await sb.from("stock_movements").insert({type:"prijem",product_id:it.product_id,lot_id:lot.id,quantity:qty,serial:it.serial||null,warehouse_id:wh,via:"zasielkou"});
   }
   await sb.from("shipments").update({status:"Doručené",received_on:new Date().toISOString().slice(0,10)}).eq("id",id);
   shipList();
@@ -1588,10 +1589,19 @@ function shipRecognizeLabels(){
       if(error||(data&&data.error)||!data||!data.found){
         const det=(data&&data.error)||(error&&(error.message||error.name))||"funkcia možno nie je nasadená";
         if(box)box.innerHTML=`<div class="msg err">Rozpoznávanie zlyhalo: ${esc(String(det))}<br><span class="muted">Skontroluj: funkcia <b>identify-labels</b> je nasadená a je nastavený <b>ANTHROPIC_API_KEY</b>.</span></div>`;return;}
-      if(data.tracking_number&&!$("#s_trk").value)$("#s_trk").value=data.tracking_number;
-      if(data.carrier&&!$("#s_carr").value)$("#s_carr").value=data.carrier;
-      const extra=[data.serial?"SN produktu: "+data.serial:"",data.ean?"EAN: "+data.ean:"",(data.references&&data.references.length)?"ďalšie: "+data.references.join(", "):""].filter(Boolean).join(" · ");
-      if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+esc(extra):""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
+      const set=(id,v)=>{const el=$("#"+id);if(el&&v&&!el.value)el.value=v;};
+      set("s_trk",data.tracking_number);set("s_carr",data.carrier);set("s_inv",data.invoice_number);set("s_order",data.order_number);
+      // produkt podľa EAN → pridaj ako položku so SN; ak nie je v katalógu, ponúkni vytvorenie
+      let itemMsg="";
+      if(data.ean){
+        const norm=s=>String(s||"").replace(/\s/g,"");
+        const prod=DATA.products.find(p=>norm(p.sku)&&norm(p.sku)===norm(data.ean));
+        if(prod){shipItems.push({product_id:prod.id,name:prod.name,quantity:1,serial:data.serial||null});shipRenderItems();
+          itemMsg=`✓ Produkt „${esc(prod.name)}" pridaný do zásielky${data.serial?" · SN "+esc(data.serial):""}.`;}
+        else{itemMsg=`Produkt s EAN ${esc(data.ean)} nie je v katalógu — <button class="btn green sm" type="button" onclick="shipEanCreate('${esc(data.ean)}','${esc((data.serial||'').replace(/'/g,''))}')">➕ Vytvoriť a pridať</button>`;}
+      }else if(data.serial){shipPendingSerial=data.serial;itemMsg=`SN produktu: <b>${esc(data.serial)}</b> — vyber produkt nižšie, sériové číslo sa pridá automaticky.`;}
+      const extra=[data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
+      if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+extra:""}${itemMsg?"<br>"+itemMsg:""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
     }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
   };
   inp.click();
@@ -1615,8 +1625,21 @@ async function shipFormTrack(){
   if(!$("#s_to").value)$("#s_to").value=[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ")||data.to||"";
   if(box)box.innerHTML=`<div class="msg ok">✓ ${esc(cf.name)}: ${esc(data.status||"")}${data.eta?" · ETA "+esc(data.eta):""}. Údaje predvyplnené — skontroluj a ulož.</div>`;
 }
-function shipAddItem(){const pid=Number($("#s_pitem").value);if(!pid)return;const p=DATA.products.find(x=>x.id===pid);const qty=Number($("#s_pqty").value||1);shipItems.push({product_id:pid,name:p?p.name:"?",quantity:qty});shipRenderItems();}
-function shipRenderItems(){const el=$("#s_items");if(el)el.innerHTML=shipItems.length?shipItems.map((it,i)=>`${it.quantity}× ${esc(it.name)} <span style="color:var(--red);cursor:pointer" onclick="shipItems.splice(${i},1);shipRenderItems()">×</span>`).join("<br>"):"Zatiaľ žiadne položky.";}
+let shipPendingSerial=null; // SN rozpoznané AI, ktoré sa pripne k ručne vybranej položke
+function shipAddItem(){const pid=Number($("#s_pitem").value);if(!pid)return;const p=DATA.products.find(x=>x.id===pid);const qty=Number($("#s_pqty").value||1);shipItems.push({product_id:pid,name:p?p.name:"?",quantity:qty,serial:shipPendingSerial||null});shipPendingSerial=null;shipRenderItems();}
+function shipRenderItems(){const el=$("#s_items");if(el)el.innerHTML=shipItems.length?shipItems.map((it,i)=>`${it.quantity}× ${esc(it.name)}${it.serial?` · SN ${esc(it.serial)}`:""} <span style="color:var(--red);cursor:pointer" onclick="shipItems.splice(${i},1);shipRenderItems()">×</span>`).join("<br>"):"Zatiaľ žiadne položky.";}
+// vytvorí produkt z EAN (dohľadá názov cez lookup-barcode) a pridá ho do zásielky so SN
+async function shipEanCreate(ean,serial){
+  const box=$("#s_trkmsg");if(box)box.innerHTML=`<div class="msg">➕ Vytváram produkt z EAN ${esc(ean)}…</div>`;
+  try{
+    let name="";try{const r=await sb.functions.invoke("lookup-barcode",{body:{code:ean}});if(r.data&&r.data.name)name=r.data.name;}catch(e){}
+    const {data:np,error}=await sb.from("products").insert({name:name||("EAN "+ean),sku:ean}).select("id,name,sku,brand_id,category_id,price,currency").single();
+    if(error){if(box)box.innerHTML=`<div class="msg err">Vytvorenie produktu zlyhalo: ${esc(error.message)}</div>`;return;}
+    DATA.products.push(np);
+    shipItems.push({product_id:np.id,name:np.name,quantity:1,serial:serial||null});shipRenderItems();
+    if(box)box.innerHTML=`<div class="msg ok">✓ Vytvorený produkt „${esc(np.name)}" (EAN ${esc(ean)}) a pridaný do zásielky${serial?" · SN "+esc(serial):""}. Detaily (kategória, cena, parametre) doplníš v Produktoch.</div>`;
+  }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
+}
 async function shipSave(){
   const trk=$("#s_trk").value.trim();if(!trk){$("#s_msg").innerHTML=`<div class="msg err">Zadaj sledovacie číslo.</div>`;return;}
   const from=$("#s_from").value.trim()||null,to=$("#s_to").value.trim()||null,send=$("#s_send").value.trim()||null;
@@ -1634,7 +1657,7 @@ async function shipSave(){
   $("#s_save").disabled=true;$("#s_msg").innerHTML="";
   const {data,error}=await sb.from("shipments").insert(rec).select("id").single();
   if(error){$("#s_save").disabled=false;$("#s_msg").innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return;}
-  if(shipItems.length){const items=shipItems.map(it=>({shipment_id:data.id,product_id:it.product_id,quantity:it.quantity}));await sb.from("shipment_items").insert(items);}
+  if(shipItems.length){const items=shipItems.map(it=>({shipment_id:data.id,product_id:it.product_id,quantity:it.quantity,serial:it.serial||null}));await sb.from("shipment_items").insert(items);}
   shipList();
   $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Zásielka ${esc(trk)} uložená.</div>`);
 }

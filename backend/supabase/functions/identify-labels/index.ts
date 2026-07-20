@@ -31,6 +31,8 @@ Rozpoznaj všetky kódy a ROZLÍŠ ich typy. Vráť IBA čisté JSON v tomto tva
   "carrier": "",           // najlepší odhad prepravcu: UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta / ... (podľa tvaru čísla alebo loga)
   "serial": "",            // SÉRIOVÉ ČÍSLO produktu (SN zariadenia), ak je na štítku
   "ean": "",               // EAN/UPC čiarový kód produktu (8/12/13 číslic), ak je
+  "invoice_number": "",    // číslo faktúry / dokladu (napr. F2026-03-006, INV-..., FA...), ak je na štítku
+  "order_number": "",      // číslo objednávky (napr. OBJ-..., ORDER..., PO...), ak je
   "references": [],        // ostatné viditeľné kódy/čísla, ktoré nevieš zaradiť
   "notes": ""              // krátka poznámka (napr. čo je na ktorej nálepke)
 }
@@ -70,6 +72,8 @@ Deno.serve(async (req) => {
       carrier: (p.carrier || "").toString().trim(),
       serial: (p.serial || "").toString().trim(),
       ean: (p.ean || "").toString().trim(),
+      invoice_number: (p.invoice_number || "").toString().trim(),
+      order_number: (p.order_number || "").toString().trim(),
       references: Array.isArray(p.references) ? p.references.filter(Boolean) : [],
       notes: (p.notes || "").toString().trim(),
       usage,
