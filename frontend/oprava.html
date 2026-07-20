@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Prihlásenie opravy / reklamácie — Kentino</title>
+<style>
+  :root{--blue:#3b6fd4;--green:#2e9e5b;--dark:#1f2733;--grey:#5b6472;--line:#e2e8f2;--bg:#f5f7fb;--card:#fff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--dark);font-size:16px;line-height:1.4}
+  .wrap{max-width:560px;margin:0 auto;padding:16px}
+  .head{background:#111a2b;color:#fff;border-radius:0 0 14px 14px;padding:18px 16px;margin:-16px -16px 16px}
+  .head b{font-size:18px;display:block}
+  .head span{font-size:13px;color:#aebbd0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+  label{display:block;font-size:12.5px;color:var(--grey);margin:10px 0 3px;font-weight:600}
+  input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;font-size:15px;background:#fff;font-family:inherit}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .btn{width:100%;padding:13px;border:none;border-radius:10px;background:var(--green);color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:16px}
+  .btn:disabled{opacity:.5}
+  .req{color:#d9534f}
+  .msg{padding:12px;border-radius:9px;font-size:14px;margin-top:12px}
+  .msg.err{background:#fde8e7;color:#b02a26}
+  .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  .ok-box{text-align:center;padding:8px}
+  .ok-box .big{font-size:44px}
+  .code{font-size:22px;font-weight:800;letter-spacing:.04em;background:#eef4ff;border:1px solid #cfe0ff;border-radius:10px;padding:10px;margin:12px 0;color:#2a4fa0}
+  .muted{color:var(--grey);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head"><b>Prihlásenie opravy / reklamácie</b><span>Vyplňte údaje vopred — pri odovzdaní tovar rýchlo prevezmeme.</span></div>
+
+  <div id="formCard" class="card">
+    <label>Typ požiadavky</label>
+    <select id="f_kind"><option value="oprava">Oprava</option><option value="reklamacia">Reklamácia</option></select>
+
+    <h4 style="margin:16px 0 0">Kontaktné údaje</h4>
+    <label>Meno a priezvisko <span class="req">*</span></label><input id="f_name" autocomplete="name">
+    <div class="row2">
+      <div><label>E-mail <span class="req">*</span></label><input id="f_email" type="email" autocomplete="email"></div>
+      <div><label>Telefón <span class="req">*</span></label><input id="f_phone" type="tel" autocomplete="tel"></div>
+    </div>
+    <label>Adresa</label><input id="f_address" autocomplete="street-address" placeholder="ulica, mesto, PSČ">
+
+    <h4 style="margin:16px 0 0">Tovar</h4>
+    <label>Názov tovaru / zariadenia <span class="req">*</span></label><input id="f_item" placeholder="napr. Antminer S19, notebook…">
+    <label>Sériové číslo (ak je)</label><input id="f_serial">
+    <label>Popis závady / dôvod reklamácie <span class="req">*</span></label><textarea id="f_fault" rows="4"></textarea>
+    <label>Poznámka (nepovinné)</label><input id="f_note">
+
+    <!-- honeypot proti botom (nezobrazuje sa) -->
+    <div class="hp" aria-hidden="true"><label>Nevypĺňajte</label><input id="f_company" tabindex="-1" autocomplete="off"></div>
+
+    <button class="btn" id="submitBtn" onclick="submitReq()">Odoslať požiadavku</button>
+    <div id="msg"></div>
+    <div class="muted">Odoslaním súhlasíte so spracovaním údajov za účelom vybavenia opravy/reklamácie.</div>
+  </div>
+
+  <div id="okCard" class="card ok-box" style="display:none">
+    <div class="big">✓</div>
+    <h2 style="margin:6px 0">Požiadavka odoslaná</h2>
+    <p class="muted" style="margin:0">Váš referenčný kód:</p>
+    <div class="code" id="okCode"></div>
+    <p class="muted">Uschovajte si ho. Pri odovzdaní tovaru ho nahláste — priradíme mu interný QR kód a začneme riešiť.</p>
+    <button class="btn" style="background:var(--blue)" onclick="location.reload()">Poslať ďalšiu požiadavku</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPA_URL="https://tvdwaknflrrreeqsetqu.supabase.co";
+const SUPA_KEY="sb_publishable_eRv55m3ChcSTGd3YoRspBg_TxYlC5NF";
+const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+const $=s=>document.querySelector(s);
+
+function genCode(){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  const rnd=Math.floor(1000+Math.random()*9000);
+  return "REQ-"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+rnd;
+}
+
+async function submitReq(){
+  const msg=$("#msg");msg.innerHTML="";
+  // honeypot: ak je vyplnený, tvár sa OK a nič neposielaj (bot)
+  if($("#f_company").value){$("#formCard").style.display="none";$("#okCode").textContent=genCode();$("#okCard").style.display="block";return;}
+  const name=$("#f_name").value.trim(),email=$("#f_email").value.trim(),phone=$("#f_phone").value.trim();
+  const item=$("#f_item").value.trim(),fault=$("#f_fault").value.trim();
+  if(!name||!email||!phone||!item||!fault){msg.innerHTML=`<div class="msg err">Vyplňte prosím povinné polia označené *.</div>`;return;}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){msg.innerHTML=`<div class="msg err">Zadajte platný e-mail.</div>`;return;}
+  const code=genCode();
+  const rec={kind:$("#f_kind").value,name,email,phone,address:$("#f_address").value.trim()||null,
+    item,serial:$("#f_serial").value.trim()||null,fault,note:$("#f_note").value.trim()||null,
+    public_code:code,status:"new"};
+  $("#submitBtn").disabled=true;
+  const {error}=await sb.from("repair_requests").insert(rec);
+  if(error){$("#submitBtn").disabled=false;msg.innerHTML=`<div class="msg err">Odoslanie zlyhalo: ${error.message}</div>`;return;}
+  $("#okCode").textContent=code;$("#formCard").style.display="none";$("#okCard").style.display="block";
+}
+</script>
+</body>
+</html>

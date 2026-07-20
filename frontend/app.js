@@ -1821,8 +1821,45 @@ function renderRepairs(){
         <select onchange="repKind=this.value;renderRepairs()">${kbtn("","Opravy + reklamácie")}${kbtn("oprava","Len opravy")}${kbtn("reklamacia","Len reklamácie")}</select>
         <select onchange="repStatus=this.value;renderRepairs()">${stOpts}</select></div>
       <div class="muted">${list.length} záznamov · zoradené po sekciách podľa stavu</div></div>
+    <div id="repReqs"></div>
     ${sections}`;
+    loadRepairRequests();
   });
+}
+// nové verejné požiadavky od zákazníkov (self-service stránka oprava.html)
+async function loadRepairRequests(){
+  const el=$("#repReqs");if(!el)return;
+  const {data,error}=await sb.from("repair_requests").select("*").eq("status","new").order("id",{ascending:false});
+  if(error||!data||!data.length){el.innerHTML="";return;}
+  const rows=data.map(q=>`<div class="lot" style="border-left:4px solid var(--orange)">
+    <div><b>${esc(q.item||"(bez názvu)")}</b> ${q.kind==="reklamacia"?`<span class="tag r">reklamácia</span>`:`<span class="tag b">oprava</span>`} <span class="muted">${esc(q.public_code||"")} · ${esc(String(q.created_at||"").replace("T"," ").slice(0,16))}</span></div>
+    <div class="m">${esc(q.name||"")}${q.email?" · "+esc(q.email):""}${q.phone?" · "+esc(q.phone):""}${q.address?" · "+esc(q.address):""}</div>
+    ${q.serial?`<div class="m">SN: ${esc(q.serial)}</div>`:""}${q.fault?`<div class="m">Závada: ${esc(q.fault)}</div>`:""}${q.note?`<div class="m">Pozn.: ${esc(q.note)}</div>`:""}
+    <div style="margin-top:6px"><button class="btn green sm" onclick="repReqTake(${q.id})">✓ Prevziať (prideliť QR)</button> <button class="btn ghost sm" onclick="repReqReject(${q.id})">Zamietnuť</button></div>
+  </div>`).join("");
+  el.innerHTML=`<div class="card" style="border:1px solid var(--orange)"><h3 style="margin:0 0 8px">📥 Nové požiadavky od zákazníkov <span class="muted" style="font-weight:400">${data.length}</span></h3>${rows}</div>`;
+}
+async function repReqTake(reqId){
+  const {data:q}=await sb.from("repair_requests").select("*").eq("id",reqId).single();
+  if(!q){alert("Požiadavka sa nenašla.");return;}
+  const o={kind:q.kind||"oprava",status:"prijaté",title:q.item||null,serial:q.serial||null,
+    customer:q.name||null,customer_email:q.email||null,customer_phone:q.phone||null,customer_address:q.address||null,
+    customer_contact:[q.email,q.phone].filter(Boolean).join(" · ")||null,
+    fault:q.fault||null,note:q.note||null,received_by:ME.email,request_id:reqId,updated_at:new Date().toISOString()};
+  const {data:ins,error}=await sb.from("repairs").insert(o).select("id").single();
+  if(error){alert("Prevzatie zlyhalo: "+error.message);return;}
+  const rid=ins.id,qr="OPR-"+rid;
+  await sb.from("repairs").update({qr_code:qr}).eq("id",rid);
+  await sb.from("repair_requests").update({status:"taken",taken_repair_id:rid}).eq("id",reqId);
+  await sb.from("repair_events").insert({repair_id:rid,stage:"prijaté",note:"Prevzaté z požiadavky "+(q.public_code||"")+" · interný QR: "+qr,data:{received_by:ME.email,fault:q.fault||null},created_by_name:ME.email});
+  alert("Prevzaté. Interný QR kód: "+qr);
+  repairDetail(rid);
+}
+async function repReqReject(reqId){
+  if(!confirm("Zamietnuť túto požiadavku?"))return;
+  const {error}=await sb.from("repair_requests").update({status:"rejected"}).eq("id",reqId);
+  if(error){alert(error.message);return;}
+  renderRepairs();
 }
 function repairForm(id,kind){
   repPhotos=[];
@@ -1840,8 +1877,10 @@ function repairForm(id,kind){
       <label>Názov tovaru (ak nie je z katalógu — prispôsobené výrobky)</label><input id="rp_title" value="${esc(rec.title||"")}">
       <div class="row2"><div><label>Sériové číslo</label><input id="rp_serial" value="${esc(rec.serial||"")}"></div>
       <div><label>Termín (najmä reklamácie)</label><input id="rp_deadline" type="date" value="${esc(rec.deadline?String(rec.deadline).slice(0,10):"")}"></div></div>
-      <div class="row2"><div><label>Zákazník</label><input id="rp_cust" value="${esc(rec.customer||"")}"></div>
-      <div><label>Kontakt (e-mail / telefón)</label><input id="rp_contact" value="${esc(rec.customer_contact||"")}"></div></div>
+      <label>Zákazník</label><input id="rp_cust" value="${esc(rec.customer||"")}">
+      <div class="row2"><div><label>E-mail</label><input id="rp_email" type="email" value="${esc(rec.customer_email||"")}"></div>
+      <div><label>Telefón</label><input id="rp_phone" type="tel" value="${esc(rec.customer_phone||"")}"></div></div>
+      <label>Adresa</label><input id="rp_address" value="${esc(rec.customer_address||"")}">
       <div class="row2"><div><label>Prijal</label><input id="rp_recv" value="${esc(rec.received_by||ME.email)}"></div>
       <div><label>Opravuje (technik)</label><input id="rp_tech" value="${esc(rec.technician||"")}"></div></div>
       <label>Popis závady</label><textarea id="rp_fault" rows="3" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:9px;font-family:inherit">${esc(rec.fault||"")}</textarea>
@@ -1865,7 +1904,9 @@ async function repairSave(id){
   const prodVal=($("#rp_prod").value||"").trim();const prod=prodVal?DATA.products.find(p=>(p.name||"").toLowerCase()===prodVal.toLowerCase()):null;
   const o={kind:$("#rp_kind").value,status:$("#rp_status").value,product_id:prod?prod.id:null,title:$("#rp_title").value.trim()||null,
     serial:$("#rp_serial").value.trim()||null,deadline:$("#rp_deadline").value||null,customer:$("#rp_cust").value.trim()||null,
-    customer_contact:$("#rp_contact").value.trim()||null,received_by:$("#rp_recv").value.trim()||null,technician:$("#rp_tech").value.trim()||null,
+    customer_email:$("#rp_email").value.trim()||null,customer_phone:$("#rp_phone").value.trim()||null,customer_address:$("#rp_address").value.trim()||null,
+    customer_contact:[$("#rp_email").value.trim(),$("#rp_phone").value.trim()].filter(Boolean).join(" · ")||null,
+    received_by:$("#rp_recv").value.trim()||null,technician:$("#rp_tech").value.trim()||null,
     fault:$("#rp_fault").value.trim()||null,price_estimate:$("#rp_price").value===""?null:Number($("#rp_price").value),price_currency:$("#rp_cur").value,
     note:$("#rp_note").value.trim()||null,updated_at:new Date().toISOString()};
   if(!o.title&&!o.product_id){$("#rp_msg").innerHTML=`<div class="msg err">Zadaj názov tovaru alebo vyber produkt.</div>`;return;}
@@ -1906,7 +1947,7 @@ async function repairDetail(id){navHash("repairs/"+id);
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ghost sm" onclick="repairForm(${id})">✏️ Upraviť základ</button><button class="btn ghost sm" onclick="repairReceipt(${id})">🧾 Protokol</button><button class="btn ghost sm" onclick="setTab('repairs')">Späť</button></div></div>
     <div style="margin:6px 0 10px">${prog}</div>
     <div class="row2" style="align-items:center"><div><label>Aktuálny stav</label><b><span class="tag ${repStatusColor(r.status)}">${esc(repStageLabel(r.status))}</span></b></div><div>${r.deadline?`<label>Termín</label><b>${esc(String(r.deadline).slice(0,10))}</b>`:""}</div></div>
-    ${row("Sériové číslo",r.serial)}${row("Zákazník",r.customer)}${row("Kontakt",r.customer_contact)}${row("Prijal",r.received_by)}${row("Opravuje (technik)",r.technician)}
+    ${row("Sériové číslo",r.serial)}${row("Interný QR kód",r.qr_code)}${row("Zákazník",r.customer)}${row("E-mail",r.customer_email)}${row("Telefón",r.customer_phone)}${row("Adresa",r.customer_address)}${row("Prijal",r.received_by)}${row("Opravuje (technik)",r.technician)}
     ${row("Popis závady",r.fault)}${row("Cena",r.price_estimate!=null?r.price_estimate+" "+(r.price_currency||""):"")}${row("Vytvorené",String(r.created_at||"").replace("T"," ").slice(0,16))}</div>
 
     <div class="card"><h4 style="margin:0 0 8px">➕ Zaznamenať krok</h4>
