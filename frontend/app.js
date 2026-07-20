@@ -1792,12 +1792,14 @@ function detectCarrierName(carrier,tracking){const c=(carrier||"").toLowerCase()
   const t=(tracking||"").toUpperCase().replace(/\s/g,"");
   if(/^1Z[0-9A-Z]{16}$/.test(t))return "UPS";
   if(/^(JJD|JVGL|JD|GM|LX)/.test(t))return "DHL Express";
-  if(/^[A-Z]{2}\d{9}CZ$/.test(t))return "Česká pošta"; // UPU formát RR…CZ (Č. pošta / Balíkovňa)
+  if(/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(t))return "Česká pošta";  // UPU medzinárodné (napr. RR…CZ)
+  if(/^[A-Z]{2}\d{8,12}[A-Z]$/.test(t))return "Balíkovna";    // Balíkovňa / ČP domáce (napr. DR…C)
   if(/^(ZBA|GLS)/.test(t)||/^\d{11,14}$/.test(t)&&/^0/.test(t))return "GLS";
   if(/^\d{12}$|^\d{15}$|^\d{20}$|^\d{22}$/.test(t))return "FedEx";
   return "";}
 function carrierFnByName(name){return {"FedEx":{fn:"fedex-track",name:"FedEx"},"GLS":{fn:"gls-track",name:"GLS"},"DHL Express":{fn:"dhl-track",name:"DHL"},"DHL Freight":{fn:"dhl-track",name:"DHL"},"UPS":{fn:"ups-track",name:"UPS"},"Česká pošta":{fn:"ceska-posta-track",name:"Česká pošta"},"Balíkovna":{fn:"ceska-posta-track",name:"Balíkovna"}}[name]||null;}
-function carrierFn(carrier,tracking){const n=detectCarrierName(carrier,tracking);return carrierFnByName(n)||carrierFnByName("UPS");}
+// keď sa prepravca nerozpozná, NEskúšaj naslepo UPS — skús Českú poštu (verejné, zadarmo; pri cudzom čísle vráti „nenašlo sa")
+function carrierFn(carrier,tracking){const n=detectCarrierName(carrier,tracking);return carrierFnByName(n)||carrierFnByName("Česká pošta");}
 function carrierSecrets(name){return {"UPS":"UPS_CLIENT_ID / UPS_CLIENT_SECRET","FedEx":"FEDEX_CLIENT_ID / FEDEX_CLIENT_SECRET","DHL Express":"DHL_API_KEY (Unified API — Express aj Freight)","DHL Freight":"DHL_API_KEY (Unified API)","GLS":"GLS_TRACK_URL + prihlásenie","Česká pošta":"(verejné API — bez kľúča)","Balíkovna":"(verejné API — bez kľúča)"}[name]||"prihlasovacie údaje prepravcu";}
 async function shipUpsTrack(id){
   const {data:s}=await sb.from("shipments").select("tracking_number,carrier").eq("id",id).single();
