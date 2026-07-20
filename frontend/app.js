@@ -1582,25 +1582,29 @@ function shipRecognizeLabels(){
   inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;
     const box=$("#s_trkmsg");if(box)box.innerHTML=`<div class="msg">🏷️ Rozpoznávam kódy z fotky…</div>`;
     try{
-      const blob=await compressImage(f,1200*1024,1800);
+      const blob=await compressImage(f,1500*1024,2560); // vyššie rozlíšenie = lepšie OCR drobného textu (SN)
       const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});
       const {data,error}=await sb.functions.invoke("identify-labels",{body:{labelImage:dataUrl}});
       logAiUsage("identify-labels",data);
       if(error||(data&&data.error)||!data||!data.found){
         const det=(data&&data.error)||(error&&(error.message||error.name))||"funkcia možno nie je nasadená";
         if(box)box.innerHTML=`<div class="msg err">Rozpoznávanie zlyhalo: ${esc(String(det))}<br><span class="muted">Skontroluj: funkcia <b>identify-labels</b> je nasadená a je nastavený <b>ANTHROPIC_API_KEY</b>.</span></div>`;return;}
+      shipLastLabels=data;
       const set=(id,v)=>{const el=$("#"+id);if(el&&v&&!el.value)el.value=v;};
       set("s_trk",data.tracking_number);set("s_carr",data.carrier);set("s_inv",data.invoice_number);set("s_order",data.order_number);
-      // produkt podľa EAN → pridaj ako položku so SN; ak nie je v katalógu, ponúkni vytvorenie
+      // párovanie produktu: podľa EAN, inak podľa názvu/modelu; inak ponúkni vytvorenie z rozpoznaných údajov
+      const norm=s=>String(s||"").replace(/\s/g,"").toLowerCase();
+      const pm=(data.product&&(data.product.model||data.product.name))||"";
+      let prod=null;
+      if(data.ean)prod=DATA.products.find(p=>norm(p.sku)&&norm(p.sku)===norm(data.ean));
+      if(!prod&&pm){const q=pm.toLowerCase();prod=DATA.products.find(p=>{const n=(p.name||"").toLowerCase(),m=(p.model||"").toLowerCase();return (n&&(n.includes(q)||q.includes(n)))||(m&&(m.includes(q)||q.includes(m)));});}
       let itemMsg="";
-      if(data.ean){
-        const norm=s=>String(s||"").replace(/\s/g,"");
-        const prod=DATA.products.find(p=>norm(p.sku)&&norm(p.sku)===norm(data.ean));
-        if(prod){shipItems.push({product_id:prod.id,name:prod.name,quantity:1,serial:data.serial||null});shipRenderItems();
-          itemMsg=`✓ Produkt „${esc(prod.name)}" pridaný do zásielky${data.serial?" · SN "+esc(data.serial):""}.`;}
-        else{itemMsg=`Produkt s EAN ${esc(data.ean)} nie je v katalógu — <button class="btn green sm" type="button" onclick="shipEanCreate('${esc(data.ean)}','${esc((data.serial||'').replace(/'/g,''))}')">➕ Vytvoriť a pridať</button>`;}
-      }else if(data.serial){shipPendingSerial=data.serial;itemMsg=`SN produktu: <b>${esc(data.serial)}</b> — vyber produkt nižšie, sériové číslo sa pridá automaticky.`;}
-      const extra=[data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
+      if(prod){shipItems.push({product_id:prod.id,name:prod.name,quantity:1,serial:data.serial||null});shipRenderItems();
+        itemMsg=`✓ Produkt „${esc(prod.name)}" pridaný do zásielky${data.serial?" · SN "+esc(data.serial):""}.`;}
+      else if(pm||data.ean){itemMsg=`Produkt ${pm?"„"+esc(pm)+"“":"(EAN "+esc(data.ean)+")"} nie je v katalógu — <button class="btn green sm" type="button" onclick="shipCreateProductFromLabel()">➕ Vytvoriť a pridať (aj s parametrami)</button>`;}
+      else if(data.serial){shipPendingSerial=data.serial;itemMsg=`SN produktu: <b>${esc(data.serial)}</b> — vyber produkt nižšie, sériové číslo sa pridá automaticky.`;}
+      const specN=data.specs?Object.keys(data.specs).length:0;
+      const extra=[data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",specN?("parametre: "+specN):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
       if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+extra:""}${itemMsg?"<br>"+itemMsg:""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
     }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
   };
@@ -1626,6 +1630,28 @@ async function shipFormTrack(){
   if(box)box.innerHTML=`<div class="msg ok">✓ ${esc(cf.name)}: ${esc(data.status||"")}${data.eta?" · ETA "+esc(data.eta):""}. Údaje predvyplnené — skontroluj a ulož.</div>`;
 }
 let shipPendingSerial=null; // SN rozpoznané AI, ktoré sa pripne k ručne vybranej položke
+let shipLastLabels=null;    // posledný výsledok identify-labels (pre vytvorenie produktu)
+async function findOrCreateBrand(name){name=(name||"").trim();if(!name)return null;
+  const ex=DATA.brands.find(x=>(x.name||"").toLowerCase()===name.toLowerCase());if(ex)return ex.id;
+  const {data,error}=await sb.from("brands").insert({name}).select("id,name").single();
+  if(error||!data)return null;DATA.brands.push(data);return data.id;}
+// vytvorí produkt z rozpoznaných údajov (názov/model/značka + parametre do popisu) a pridá ho do zásielky so SN
+async function shipCreateProductFromLabel(){
+  const d=shipLastLabels;if(!d){return;}const box=$("#s_trkmsg");
+  const P=d.product||{};const name=((P.model||P.name||"").trim())||(d.ean?("EAN "+d.ean):"Nový produkt");
+  if(box)box.innerHTML=`<div class="msg">➕ Vytváram produkt „${esc(name)}"…</div>`;
+  try{
+    const brand_id=await findOrCreateBrand(P.brand);
+    const specsTxt=(d.specs&&Object.keys(d.specs).length)?Object.entries(d.specs).map(([k,v])=>k+": "+v).join("\n"):null;
+    const rec={name,model:P.model||null,brand_id,long_description:specsTxt,source:"photo"};
+    if(d.ean)rec.sku=d.ean;
+    const {data:np,error}=await sb.from("products").insert(rec).select("id,name,sku,brand_id,category_id,model").single();
+    if(error){if(box)box.innerHTML=`<div class="msg err">Vytvorenie produktu zlyhalo: ${esc(error.message)}</div>`;return;}
+    DATA.products.push(np);
+    shipItems.push({product_id:np.id,name:np.name,quantity:1,serial:d.serial||null});shipRenderItems();
+    if(box)box.innerHTML=`<div class="msg ok">✓ Vytvorený produkt „${esc(np.name)}"${P.brand?" ("+esc(P.brand)+")":""} a pridaný do zásielky${d.serial?" · SN "+esc(d.serial):""}.${specsTxt?" Parametre uložené do popisu.":""} <span class="muted">Kategóriu/cenu doplníš v Produktoch.</span></div>`;
+  }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
+}
 function shipAddItem(){const pid=Number($("#s_pitem").value);if(!pid)return;const p=DATA.products.find(x=>x.id===pid);const qty=Number($("#s_pqty").value||1);shipItems.push({product_id:pid,name:p?p.name:"?",quantity:qty,serial:shipPendingSerial||null});shipPendingSerial=null;shipRenderItems();}
 function shipRenderItems(){const el=$("#s_items");if(el)el.innerHTML=shipItems.length?shipItems.map((it,i)=>`${it.quantity}× ${esc(it.name)}${it.serial?` · SN ${esc(it.serial)}`:""} <span style="color:var(--red);cursor:pointer" onclick="shipItems.splice(${i},1);shipRenderItems()">×</span>`).join("<br>"):"Zatiaľ žiadne položky.";}
 // vytvorí produkt z EAN (dohľadá názov cez lookup-barcode) a pridá ho do zásielky so SN
