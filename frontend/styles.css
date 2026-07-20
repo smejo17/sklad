@@ -1,0 +1,106 @@
+  :root{--blue:#3b6fd4;--green:#2e9e5b;--orange:#e08a1e;--red:#d9534f;--dark:#1f2733;--grey:#5b6472;--line:#e2e8f2;--bg:#f5f7fb;--card:#fff}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--dark);font-size:16px}
+  .wrap{max-width:680px;margin:0 auto;padding:14px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#111a2b;color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10}
+  .top b{font-size:16px}.top .who{font-size:12px;color:#aebbd0}
+  .tabs{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
+  .tabs button{flex:1;min-width:90px;padding:11px 8px;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  .tabs button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+  label{display:block;font-size:12.5px;color:var(--grey);margin:8px 0 3px;font-weight:600}
+  input,select,textarea{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:9px;font-size:14.5px;background:#fff}
+  .btn{width:100%;padding:9px 12px;border:none;border-radius:9px;background:var(--blue);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;margin-top:8px}
+  .btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.ghost{background:#fff;color:var(--dark);border:1px solid var(--line)}
+  .btn.sm{width:auto;padding:5px 10px;margin:0;font-size:13px;font-weight:600}
+  .btn:disabled{opacity:.5}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .inline{display:flex;gap:8px;align-items:flex-end}
+  .sug{border:1px solid var(--line);border-radius:10px;margin-top:6px;max-height:260px;overflow:auto}
+  .sug .it{padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+  .sug .it:active{background:#eef4ff}.sug .it b{font-size:14.5px}.sug .it .m{font-size:12px;color:var(--grey)}
+  .msg{padding:9px 11px;border-radius:9px;font-size:13.5px;margin:8px 0}
+  .msg.ok{background:#e4f6ea;color:#1d7d43}.msg.err{background:#fde8e7;color:#b02a26}
+  .lot{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:6px}
+  .lot b{font-size:14.5px}.lot .m{font-size:12.5px;color:var(--grey);margin-top:2px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;background:#eef1f6;color:#5b6472}
+  .tagchip{display:inline-block;padding:3px 9px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;margin:2px;border:1px solid transparent}
+  .tagchip.on{outline:2px solid #2a4fa0}
+  .tag.g{background:#e4f6ea;color:#1d7d43}.tag.o{background:#fdf0df;color:#a8630c}.tag.r{background:#fde8e7;color:#b02a26}.tag.b{background:#e6eefb;color:#2a4fa0}
+  .chosen{display:flex;justify-content:space-between;align-items:center;background:#eef4ff;border:1px solid #cfe0ff;border-radius:10px;padding:10px 12px}
+  .muted{color:var(--grey);font-size:13px}
+  h2{font-size:18px;margin-bottom:4px}
+  .hide{display:none!important}
+  .center{min-height:70vh;display:flex;align-items:center;justify-content:center}
+  .login{width:100%;max-width:360px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .toolbar input,.toolbar select{flex:1;min-width:120px}
+  #scanOverlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  #reader{width:100%;max-width:340px;background:#000;border-radius:12px;overflow:hidden}
+  #scanOverlay .lbl{color:#fff;margin-bottom:12px;font-size:15px}
+  /* orezanie fotky (sériové číslo) */
+  #cropOverlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:110;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px}
+  #cropStage{position:relative;max-width:96vw;max-height:68vh;touch-action:none}
+  #cropStage img{max-width:96vw;max-height:68vh;display:block;user-select:none;-webkit-user-drag:none}
+  #cropSel{position:absolute;border:2px dashed #4af;background:rgba(70,150,255,.18);display:none}
+  /* modal */
+  #modalOverlay{position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:95;display:flex;align-items:flex-start;justify-content:center;padding:28px 14px;overflow:auto}
+  #modalCard{background:#fff;border-radius:14px;max-width:780px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  /* QR tlač */
+  .qsheet{display:flex;flex-wrap:wrap;gap:0}
+  .qcell{position:relative;display:flex;flex-direction:column;align-items:center;padding:3mm;page-break-inside:avoid}
+  .qcell img{display:block}
+  .qcell .qc{font-size:8pt;margin-top:1mm;word-break:break-all;max-width:36mm;text-align:center;line-height:1.15}
+  /* rezacie krížiky medzi kódmi (v rohoch buniek) */
+  .qcell.cutx::before,.qcell.cutx::after{content:"";position:absolute;width:10px;height:10px;background:linear-gradient(#8a94a6,#8a94a6) center/1px 10px no-repeat,linear-gradient(#8a94a6,#8a94a6) center/10px 1px no-repeat}
+  .qcell.cutx::before{top:-5px;left:-5px}
+  .qcell.cutx::after{top:-5px;right:-5px}
+  @media print{.top,.tabs,.noprint,#sidebar,.pagehead{display:none!important}.wrap{max-width:100%;padding:0}.card{border:0;padding:0}#main{margin:0}}
+  /* ===== Layout: PC = bočné menu, mobil = horné taby ===== */
+  #appView{display:flex;min-height:100vh}
+  #appView.mob{display:block}
+  #sidebar{flex:0 0 238px;width:238px;background:#111a2b;color:#e7edf6;min-height:100vh;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:16px 12px}
+  #appView.mob #sidebar{display:none}
+  #main{flex:1;min-width:0}
+  .sb-brand{padding:4px 10px 12px}
+  .sb-brand b{font-size:17px;color:#fff;display:block}
+  .sb-brand .v{font-size:11px;color:#8b97ac;margin-top:2px}
+  .sb-nav{flex:1;overflow-y:auto;margin-top:4px}
+  .sb-grp{font-size:11px;letter-spacing:.06em;color:#7f8ba1;margin:16px 10px 6px;text-transform:uppercase}
+  .sb-nav button{display:block;width:100%;text-align:left;background:transparent;border:0;color:#cdd6e5;padding:10px 12px;border-radius:9px;font-size:14.5px;font-weight:600;cursor:pointer;margin-bottom:2px}
+  .sb-nav button:hover{background:#1b2740}
+  .sb-nav button.on{background:var(--blue);color:#fff}
+  .sb-foot{border-top:1px solid #22314c;padding:12px 8px 4px;margin-top:8px}
+  .sb-foot .lbl{font-size:11px;color:#7f8ba1}
+  .sb-foot .who2{color:#fff;font-size:13.5px;font-weight:600;margin:2px 0 8px}
+  .sb-foot .btn{margin-top:0;margin-bottom:6px;padding:9px}
+  .pagehead{padding:22px 28px 4px;border-bottom:1px solid var(--line);background:var(--card)}
+  #appView.mob .pagehead{display:none}
+  /* mobil: záložky ako vodorovne posuvná lišta + kompaktnejší obsah */
+  #appView.mob .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:4px;margin:8px 0;padding-bottom:4px}
+  #appView.mob .tabs button{flex:0 0 auto;min-width:auto;padding:8px 10px;font-size:13px}
+  #appView.mob .wrap{padding:8px}
+  #appView.mob .row2{flex-wrap:wrap}
+  #appView.mob table.ptbl{font-size:13px}
+  #appView.mob .toolbar input,#appView.mob .toolbar select{min-width:100px}
+  #appView.mob #modalCard{padding:14px}
+  .pagehead h1{font-size:22px}
+  .pagehead .sub{color:var(--grey);font-size:13px;margin-top:3px}
+  #appView:not(.mob) .top{display:none}
+  #appView:not(.mob) .tabs{display:none}
+  #appView:not(.mob) .wrap{max-width:1240px;margin:0;padding:20px 28px}
+  #appView:not(.mob) .card .btn{max-width:360px}
+  /* produktová tabuľka (PC) */
+  .ptbl-wrap{overflow-x:auto}
+  table.ptbl{width:100%;border-collapse:collapse;font-size:14px}
+  table.ptbl th{text-align:left;font-size:11px;letter-spacing:.04em;color:#8b97ac;text-transform:uppercase;padding:6px 8px;border-bottom:2px solid var(--line);white-space:nowrap}
+  table.ptbl td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.ptbl tr:hover td{background:#f8fafe}
+  table.ptbl .pimg{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block}
+  table.ptbl .pnm{font-weight:700;color:var(--blue)}
+  table.ptbl .psub{font-size:12px;color:var(--grey);margin-top:2px}
+  table.ptbl .r{text-align:right}
+  /* miniatúra so zväčšením po nabehnutí kurzorom */
+  .zoomwrap{position:relative;display:inline-block}
+  .zoomwrap .zoombig{display:none;position:absolute;left:52px;top:-8px;z-index:60;width:240px;height:240px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 34px rgba(0,0,0,.28);padding:5px}
+  .zoomwrap:hover .zoombig{display:block}

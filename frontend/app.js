@@ -1,4 +1,3 @@
-
 // ===== KONFIG (verejné hodnoty) =====
 const SUPA_URL="https://tvdwaknflrrreeqsetqu.supabase.co";
 const SUPA_KEY="sb_publishable_eRv55m3ChcSTGd3YoRspBg_TxYlC5NF";
