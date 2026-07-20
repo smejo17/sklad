@@ -201,19 +201,22 @@ function getFmts(){try{const F=Html5QrcodeSupportedFormats;return [F.QR_CODE,F.C
 function isEanCode(code,fmt){const f=String(fmt||"").toUpperCase();if(/EAN|UPC/.test(f))return true;const digits=String(code||"").replace(/\D/g,"");return /^\d{8}$|^\d{12,14}$/.test(digits)&&String(code||"").replace(/[\s\d]/g,"").length===0;}
 let scanPrefer=null,scanIgnored=null;
 function openScan(cb,opts){scanCb=cb;scanPrefer=(opts&&opts.prefer)||null;scanIgnored=null;torchOn=false;$("#scanOverlay").classList.remove("hide");
+  const isQr=!!(opts&&opts.qr);
   const hint=$("#scanHint");if(hint){hint.classList.add("hide");hint.innerHTML="";}
-  const lbl=$("#scanLbl");if(lbl)lbl.textContent=scanPrefer==="ean"?"Namier na EAN / čiarový kód (číslice) — nie na sériové číslo":"Namier na kód · pri malom priblíž zoomom alebo odfoť";
+  const lbl=$("#scanLbl");if(lbl)lbl.textContent=isQr?"Naskenuj QR kód (alebo sériové číslo)":(scanPrefer==="ean"?"Namier na EAN / čiarový kód (číslice) — nie na sériové číslo":"Namier na kód · pri malom priblíž zoomom alebo odfoť");
   if(!window.Html5Qrcode){alert("Skener sa nenačítal (internet?).");closeScan();return;}
   $("#zoomWrap").classList.add("hide");$("#torchBtn").style.display="none";
   qrScanner=new Html5Qrcode("reader");
   // vyššie rozlíšenie = malý kód má viac pixelov
   const onScan=(txt,res)=>{const code=qrNormScan(txt);const fmt=res&&res.result&&res.result.format&&res.result.format.formatName;scanAccept(code,fmt);};
+  // QR = štvorcové okno; čiarový kód = širšie okno
+  const box=isQr?{width:240,height:240}:{width:270,height:180};
   // prvý argument start() smie mať IBA 1 kľúč; rozlíšenie ide cez videoConstraints v konfigurácii
-  const cfg={fps:12,qrbox:{width:270,height:180},formatsToSupport:getFmts(),videoConstraints:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}}};
+  const cfg={fps:12,qrbox:box,formatsToSupport:getFmts(),videoConstraints:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}}};
   qrScanner.start({facingMode:"environment"},cfg,onScan,()=>{})
     .then(setupCamControls)
     .catch(()=>{ // fallback bez náročných constraints (prísnejšie prehliadače/zariadenia)
-      qrScanner.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:170},formatsToSupport:getFmts()},onScan,()=>{})
+      qrScanner.start({facingMode:"environment"},{fps:10,qrbox:box,formatsToSupport:getFmts()},onScan,()=>{})
         .then(setupCamControls).catch(e=>{alert("Kamera sa nespustila: "+e);closeScan();});
     });
 }
@@ -317,9 +320,11 @@ function renderRecv(){
 }
 let recvKeep=null;
 function rSearch(){const q=($("#r_q").value||"").trim().toLowerCase();let list=DATA.products;
-  if(q)list=list.filter(p=>((p.name||"")+" "+brandName(p)+" "+(p.model||"")+" "+(p.sku||"")).toLowerCase().includes(q));
+  // vyhľadáva v názve, značke, modeli, SKU, KATEGÓRII aj TAGOCH
+  if(q)list=list.filter(p=>((p.name||"")+" "+brandName(p)+" "+(p.model||"")+" "+(p.sku||"")+" "+catPathText(p.category_id)+" "+productTagNames(p.id).join(" ")).toLowerCase().includes(q));
   list=list.slice(0,25);
-  $("#r_sug").innerHTML=list.length?list.map(p=>`<div class="it" onclick="rPick(${p.id})"><b>${esc(p.name)}</b><div class="m">${esc(brandName(p))} ${esc(p.model||"")} ${esc(p.sku||"")}</div></div>`).join(""):`<div class="it muted">Nič sa nenašlo.</div>`;}
+  $("#r_sug").innerHTML=list.length?list.map(p=>{const cat=catPathText(p.category_id);const tags=productTagNames(p.id);
+    return `<div class="it" onclick="rPick(${p.id})"><b>${esc(p.name)}</b><div class="m">${esc(brandName(p))} ${esc(p.model||"")} ${esc(p.sku||"")}${cat?" · "+esc(cat):""}${tags.length?" · "+tags.map(t=>"#"+esc(t)).join(" "):""}</div></div>`;}).join(""):`<div class="it muted">Nič sa nenašlo.</div>`;}
 function rPick(id){recvSel=id;renderRecv();}
 function rReset(){recvSel=null;recvKeep=null;renderRecv();}
 let lastScanCode="";
@@ -473,7 +478,7 @@ async function renderIssue(){
     <hr style="border:0;border-top:1px solid var(--line);margin:6px 0 12px">
     <div class="muted" style="margin-bottom:8px">Jeden tovar: nájdi nižšie. Viac tovarov naraz (jedna výdajka): v <b>Zásobách</b> označ položky → <b>Vydať vybrané</b>.</div>
     <label>Nájdi položku (QR / SN / názov / pozícia)</label>
-    <div class="inline"><input id="i_q" placeholder="naskenuj QR alebo napíš…" oninput="iSearch()" autocomplete="off"><button class="btn ghost sm" onclick="openScan(t=>{$('#i_q').value=t;iSearch();})">📷</button></div>
+    <div class="inline"><input id="i_q" placeholder="naskenuj QR alebo napíš…" oninput="iSearch()" autocomplete="off"><button class="btn ghost sm" onclick="openScan(t=>{$('#i_q').value=t;iSearch();},{qr:true})">📷 QR</button></div>
     <div id="i_sug" class="sug"></div></div><div id="i_form"></div>
     <div class="card"><h4>História výdajok</h4><div id="issueHist" class="muted">Načítavam…</div></div>`;
   // načítaj zásoby do pamäte pre hľadanie
@@ -630,6 +635,7 @@ function renderStock(){
   const stTagChips=DATA.tags.filter(t=>stTagIds.has(t.id)||String(t.id)===sf.tag).sort((a,b)=>a.name.localeCompare(b.name)).map(t=>tagChip(t,String(t.id)===sf.tag,`sf.tag=(sf.tag==='${t.id}'?'':'${t.id}');saveStockFilters();renderStock()`)).join("")||`<span class="muted" style="font-size:12px">žiadne tagy</span>`;
   $("#view").innerHTML=`
   <div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    <button class="btn sm" onclick="stockScanFind()">📷 Nájsť tovar (QR/SN)</button>
     ${canWrite()?`<button class="btn green sm" onclick="setTab('recv')">+ Príjem na sklad</button><button class="btn red sm" onclick="setTab('issue')">− Výdaj</button>`:""}
     ${ME.role==="admin"?`<button class="btn ghost sm" onclick="openPlacement()">🗺️ Rozmiestnenie</button>`:""}
     <button class="btn ghost sm" onclick="stockExport()">⬇ Export (Excel/CSV)</button></div></div>
@@ -712,13 +718,22 @@ async function bulkIssueDo(){const ids=selectedLotIds();const items=ids.map(id=>
 // výdaj konkrétnej šarže
 let issuePreselect=null;
 function lotIssue(id){issuePreselect=id;setTab("issue");}
+// naskenuj QR / sériové číslo a otvor príslušnú položku na sklade (úprava stavu/popisu, parametre)
+function stockScanFind(){openScan(code=>{
+  const c=String(code||"").trim().toLowerCase();if(!c)return;
+  const lot=stockLots.find(l=>((l.qr_code||"").toLowerCase()===c)||((l.serial||"").toLowerCase()===c));
+  if(lot){lotEdit(lot.id);return;}
+  const prod=DATA.products.find(p=>(p.sku||"").toLowerCase()===c||(p.name||"").toLowerCase()===c);
+  if(prod){prodDetail(prod.id);return;}
+  alert("Pre kód „"+code+"“ sa nenašla položka na sklade ani produkt.\nSkontroluj QR / sériové číslo.");
+},{qr:true});}
 // úprava jednej šarže (modal)
 function lotEdit(id){const l=stockLots.find(x=>x.id===id);if(!l)return;
   const whOpts=DATA.warehouses.map(w=>`<option value="${w.id}" ${w.id===l.warehouse_id?"selected":""}>${esc(w.name)}</option>`).join("");
   const stOpts=Object.keys(STATE_LBL).map(k=>`<option value="${k}" ${l.state===k?"selected":""}>${STATE_LBL[k]}</option>`).join("");
   const p=prodOf(l.product_id);
   openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Upraviť šaržu</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
-    <div class="muted" style="margin-bottom:6px">${esc((l.products&&l.products.name)||p.name||"")}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px"><span class="muted">${esc((l.products&&l.products.name)||p.name||"")}</span><button class="btn ghost sm" onclick="closeModal();prodDetail(${l.product_id})">ⓘ Parametre produktu</button></div>
     <div class="row2"><div><label>Sklad</label><select id="le_wh" onchange="leFillLoc()">${whOpts}</select></div>
     <div><label>Pozícia</label><select id="le_loc"></select></div></div>
     <div class="row2"><div><label>Stav</label><select id="le_state">${stOpts}</select></div>
@@ -1844,21 +1859,12 @@ async function loadRepairRequests(){
   </div>`).join("");
   el.innerHTML=`<div class="card" style="border:1px solid var(--orange)"><h3 style="margin:0 0 8px">📥 Nové požiadavky od zákazníkov <span class="muted" style="font-weight:400">${data.length}</span></h3>${rows}</div>`;
 }
+// Prevziať požiadavku → otvor prijímací formulár (QR, fotky, poznámky) prefill z požiadavky
 async function repReqTake(reqId){
-  const {data:q}=await sb.from("repair_requests").select("*").eq("id",reqId).single();
-  if(!q){alert("Požiadavka sa nenašla.");return;}
-  const o={kind:q.kind||"oprava",status:"prijaté",title:q.item||null,serial:q.serial||null,
-    customer:q.name||null,customer_email:q.email||null,customer_phone:q.phone||null,customer_address:q.address||null,
-    customer_contact:[q.email,q.phone].filter(Boolean).join(" · ")||null,
-    fault:q.fault||null,note:q.note||null,received_by:ME.email,request_id:reqId,updated_at:new Date().toISOString()};
-  const {data:ins,error}=await sb.from("repairs").insert(o).select("id").single();
-  if(error){alert("Prevzatie zlyhalo: "+error.message);return;}
-  const rid=ins.id,qr="OPR-"+rid;
-  await sb.from("repairs").update({qr_code:qr}).eq("id",rid);
-  await sb.from("repair_requests").update({status:"taken",taken_repair_id:rid}).eq("id",reqId);
-  await sb.from("repair_events").insert({repair_id:rid,stage:"prijaté",note:"Prevzaté z požiadavky "+(q.public_code||"")+" · interný QR: "+qr,data:{received_by:ME.email,fault:q.fault||null},created_by_name:ME.email});
-  alert("Prevzaté. Interný QR kód: "+qr);
-  repairDetail(rid);
+  const {data:q,error}=await sb.from("repair_requests").select("*").eq("id",reqId).single();
+  if(error||!q){alert("Požiadavka sa nenašla.");return;}
+  repairForm(0,q.kind||"oprava",q);
+  setTimeout(()=>{const m=$("#rp_msg");if(m)m.innerHTML=`<div class="msg ok">Prevzatie požiadavky ${esc(q.public_code||"")} — priraď QR (naskenuj alebo vygeneruj), doplň fotky/poznámky a ulož.</div>`;},60);
 }
 async function repReqReject(reqId){
   if(!confirm("Zamietnuť túto požiadavku?"))return;
@@ -1866,9 +1872,14 @@ async function repReqReject(reqId){
   if(error){alert(error.message);return;}
   renderRepairs();
 }
-function repairForm(id,kind){
+let repTakeReqId=null; // ak formulár vzniká z verejnej požiadavky
+function repGenQr(){const el=$("#rp_qr");if(el)el.value="OPR-"+Date.now().toString(36).toUpperCase().slice(-6);}
+function repairForm(id,kind,req){
   repPhotos=[];
-  const r=id?null:{kind:kind||"oprava",status:"prijaté",received_by:ME.email,price_currency:"EUR"};
+  repTakeReqId=(req&&req.id)||null;
+  const r=id?null:{kind:(req&&req.kind)||kind||"oprava",status:"prijaté",received_by:ME.email,price_currency:"EUR",
+    title:(req&&req.item)||"",serial:(req&&req.serial)||"",customer:(req&&req.name)||"",customer_email:(req&&req.email)||"",
+    customer_phone:(req&&req.phone)||"",customer_address:(req&&req.address)||"",fault:(req&&req.fault)||"",note:(req&&req.note)||""};
   const load=id?sb.from("repairs").select("*").eq("id",id).single():Promise.resolve({data:r});
   load.then(({data:rec})=>{
     if(id)repPhotos=[];
@@ -1882,6 +1893,7 @@ function repairForm(id,kind){
       <label>Názov tovaru (ak nie je z katalógu — prispôsobené výrobky)</label><input id="rp_title" value="${esc(rec.title||"")}">
       <div class="row2"><div><label>Sériové číslo</label><input id="rp_serial" value="${esc(rec.serial||"")}"></div>
       <div><label>Termín (najmä reklamácie)</label><input id="rp_deadline" type="date" value="${esc(rec.deadline?String(rec.deadline).slice(0,10):"")}"></div></div>
+      <label>Interný QR kód</label><div class="inline"><input id="rp_qr" value="${esc(rec.qr_code||"")}" placeholder="OPR-… (naskenuj alebo vygeneruj)"><button class="btn ghost sm" type="button" onclick="openScan(t=>$('#rp_qr').value=t,{qr:true})">📷</button><button class="btn ghost sm" type="button" onclick="repGenQr()">⚙ Vygenerovať</button></div>
       <label>Zákazník</label><input id="rp_cust" value="${esc(rec.customer||"")}">
       <div class="row2"><div><label>E-mail</label><input id="rp_email" type="email" value="${esc(rec.customer_email||"")}"></div>
       <div><label>Telefón</label><input id="rp_phone" type="tel" value="${esc(rec.customer_phone||"")}"></div></div>
@@ -1913,7 +1925,7 @@ async function repairSave(id){
     customer_contact:[$("#rp_email").value.trim(),$("#rp_phone").value.trim()].filter(Boolean).join(" · ")||null,
     received_by:$("#rp_recv").value.trim()||null,technician:$("#rp_tech").value.trim()||null,
     fault:$("#rp_fault").value.trim()||null,price_estimate:$("#rp_price").value===""?null:Number($("#rp_price").value),price_currency:$("#rp_cur").value,
-    note:$("#rp_note").value.trim()||null,updated_at:new Date().toISOString()};
+    note:$("#rp_note").value.trim()||null,qr_code:($("#rp_qr")?$("#rp_qr").value.trim():"")||null,updated_at:new Date().toISOString()};
   if(!o.title&&!o.product_id){$("#rp_msg").innerHTML=`<div class="msg err">Zadaj názov tovaru alebo vyber produkt.</div>`;return;}
   $("#rp_save").disabled=true;
   let rid=id,err;
@@ -1921,8 +1933,15 @@ async function repairSave(id){
   else{const r=await sb.from("repairs").insert(o).select("id").single();err=r.error;rid=r.data&&r.data.id;}
   if(err){$("#rp_save").disabled=false;$("#rp_msg").innerHTML=`<div class="msg err">${esc(err.message)}</div>`;return;}
   if(repPhotos.length&&rid){await sb.from("repair_photos").insert(repPhotos.map(u=>({repair_id:rid,url:u})));}
+  // ak vzniklo z verejnej požiadavky — prideľ QR (ak prázdny), prepoj a označ požiadavku za prevzatú
+  if(!id&&rid&&repTakeReqId){
+    const qr=o.qr_code||("OPR-"+rid);
+    await sb.from("repairs").update({qr_code:qr,request_id:repTakeReqId}).eq("id",rid);
+    await sb.from("repair_requests").update({status:"taken",taken_repair_id:rid}).eq("id",repTakeReqId);
+    o.qr_code=qr;repTakeReqId=null;
+  }
   // pri NOVOM zázname založ prvý krok denníka „prijaté" (nemenný)
-  if(!id&&rid){await sb.from("repair_events").insert({repair_id:rid,stage:o.status||"prijaté",note:o.note||null,
+  if(!id&&rid){await sb.from("repair_events").insert({repair_id:rid,stage:o.status||"prijaté",note:(o.note||"")+(o.qr_code?" · QR: "+o.qr_code:"")||null,
     data:{received_by:o.received_by||null,fault:o.fault||null},created_by_name:ME.email});}
   setTab("repairs");
 }
