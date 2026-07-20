@@ -1527,7 +1527,7 @@ function shipForm(){
   const prodOpts=`<option value="">— produkt —</option>`+DATA.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
   const cur=c=>["CZK","EUR","USD","BTC"].map(x=>`<option ${c===x?"selected":""}>${x}</option>`).join("");
   $("#view").innerHTML=`<div class="card"><h2>Nová zásielka</h2>
-    <label>Sledovacie číslo (tracking)</label><div class="inline"><input id="s_trk" placeholder="napr. 1Z… / CN…"><button class="btn ghost sm" onclick="openScan(t=>$('#s_trk').value=t)">📷</button><button class="btn sm" type="button" onclick="shipFormTrack()">🔍 Zistiť údaje</button></div>
+    <label>Sledovacie číslo (tracking)</label><div class="inline" style="flex-wrap:wrap;gap:6px"><input id="s_trk" placeholder="napr. 1Z… / CN…"><button class="btn ghost sm" onclick="openScan(t=>$('#s_trk').value=t,{qr:true})">📷</button><button class="btn sm" type="button" onclick="shipFormTrack()">🔍 Zistiť údaje</button><button class="btn ghost sm" type="button" onclick="shipRecognizeLabels()">🏷️ Rozpoznať kódy (AI)</button></div>
     <div id="s_trkmsg" style="margin-top:6px"></div>
     <label>Prepravca</label><input id="s_carr" list="carrierList" placeholder="UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta…"><datalist id="carrierList"><option>UPS</option><option>FedEx</option><option>DHL Express</option><option>DHL Freight</option><option>GLS</option><option>PPL</option><option>Packeta</option><option>Česká pošta</option></datalist>
     <div class="muted" style="font-size:12px;margin-top:4px">Smer zásielky (od nás / k nám / dropship) sa určí automaticky z adries.</div>
@@ -1571,6 +1571,26 @@ function shipForm(){
   shipRenderItems();
 }
 // pri zadávaní zásielky — zisti údaje priamo z tracking čísla (auto prepravca)
+// odfoť zásielku s viacerými nálepkami → AI rozlíši tracking / SN / EAN
+function shipRecognizeLabels(){
+  const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
+  inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;
+    const box=$("#s_trkmsg");if(box)box.innerHTML=`<div class="msg">🏷️ Rozpoznávam kódy z fotky…</div>`;
+    try{
+      const blob=await compressImage(f,1200*1024,1800);
+      const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});
+      const {data,error}=await sb.functions.invoke("identify-labels",{body:{labelImage:dataUrl}});
+      if(error||(data&&data.error)||!data||!data.found){
+        const det=(data&&data.error)||(error&&(error.message||error.name))||"funkcia možno nie je nasadená";
+        if(box)box.innerHTML=`<div class="msg err">Rozpoznávanie zlyhalo: ${esc(String(det))}<br><span class="muted">Skontroluj: funkcia <b>identify-labels</b> je nasadená a je nastavený <b>ANTHROPIC_API_KEY</b>.</span></div>`;return;}
+      if(data.tracking_number&&!$("#s_trk").value)$("#s_trk").value=data.tracking_number;
+      if(data.carrier&&!$("#s_carr").value)$("#s_carr").value=data.carrier;
+      const extra=[data.serial?"SN produktu: "+data.serial:"",data.ean?"EAN: "+data.ean:"",(data.references&&data.references.length)?"ďalšie: "+data.references.join(", "):""].filter(Boolean).join(" · ");
+      if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+esc(extra):""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
+    }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
+  };
+  inp.click();
+}
 async function shipFormTrack(){
   const trk=$("#s_trk").value.trim();if(!trk){alert("Zadaj tracking číslo.");return;}
   const cf=carrierFn($("#s_carr").value,trk);
