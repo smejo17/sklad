@@ -45,7 +45,7 @@ async function onLogin(){
   ["tab_admin","tab_cats","tab_dupes","nav_admin","nav_cats","nav_dupes","grp_admin"].forEach(x=>{const el=$("#"+x);if(el)el.classList.toggle("hide",notAdmin);});
   loadFilters();loadStockFilters();
   const saved=localStorage.getItem("uimode");isMobile = saved? saved==="m" : matchMedia("(max-width:760px)").matches;
-  await loadData();setTab("recv");applyMode();
+  await loadData();applyMode();route();
 }
 // ===== režim PC / mobil =====
 // Mobil = zjednodušené: pridávanie zásob (Príjem) + zásielok, vyhľadávanie/zoznam
@@ -75,7 +75,7 @@ function similarProduct(name,exceptId){const n=normName(name);if(n.length<3)retu
 async function loadData(){
   const [p,w,l,c,b,tg,pt,ad,pa]=await Promise.all([
     sb.from("products").select("id,name,model,sku,category_id,price,currency,weight_g,brand_id,image_url,description,long_description,price_source,price_updated_at,brands(name)").order("name").limit(3000),
-    sb.from("warehouses").select("id,name,color").order("name"),
+    sb.from("warehouses").select("id,name,address,color").order("name"),
     sb.from("warehouse_locations").select("id,warehouse_id,code,description").order("sort_order"),
     sb.from("categories").select("id,name,parent_id").order("name"),
     sb.from("brands").select("id,name").order("name"),
@@ -169,11 +169,28 @@ const TAB_TITLE={recv:["Príjem na sklad","Naskladnenie tovaru — vyhľadaj/nas
   cats:["Kategórie a tagy","Vytvárať, upravovať, presúvať, zlučovať kategórie a tagy"],
   dupes:["Duplicity","Nájsť a zlúčiť duplicitné produkty"],
   admin:["Správa","Sklady, pozície, role a používatelia"]};
-function setTab(t){tab=t;
+const RENDER={recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProds,ship:renderShip,repairs:renderRepairs,assets:renderAssets,docs:loadDocs,qr:renderQR,cats:renderCats,dupes:renderDupes,admin:renderSettings};
+// len zvýrazní tab + hlavičku (bez vykreslenia obsahu)
+function markTab(t){tab=t;
   TABS.forEach(x=>{const b=$("#tab_"+x);if(b)b.classList.toggle("on",x===t);const n=$("#nav_"+x);if(n)n.classList.toggle("on",x===t);});
-  const ti=TAB_TITLE[t]||["Sklad",""];$("#pageTitle").textContent=ti[0];$("#pageSub").textContent=ti[1];
-  $("#view").className="";
-  ({recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProds,ship:renderShip,repairs:renderRepairs,assets:renderAssets,docs:loadDocs,qr:renderQR,cats:renderCats,dupes:renderDupes,admin:renderSettings}[t])();}
+  const ti=TAB_TITLE[t]||["Sklad",""];$("#pageTitle").textContent=ti[0];$("#pageSub").textContent=ti[1];}
+function setTab(t){markTab(t);$("#view").className="";RENDER[t]();navHash(t);}
+
+// ===== ROUTING (hash v adrese — zdieľateľné odkazy + tlačidlá Späť/Vpred) =====
+// taby: #stock ; detail: #ship/123 , #prods/45 , #repairs/7 , #assets/3
+const DETAIL={ship:shipDetail,prods:prodDetail,repairs:repairDetail,assets:assetDetail};
+let _routeLock=false;
+// nastaví adresu bez zacyklenia (hashchange sa preskočí, ak zmenu vyvolala appka)
+function navHash(h){if(("#"+h)!==location.hash){_routeLock=true;location.hash=h;}}
+function route(){
+  const raw=decodeURIComponent((location.hash||"").replace(/^#\/?/,""));
+  if(!raw){setTab("recv");return;}
+  const i=raw.indexOf("/");const t=i<0?raw:raw.slice(0,i);const id=i<0?"":raw.slice(i+1);
+  if(!TABS.includes(t)||(ADMIN_TABS.includes(t)&&ME.role!=="admin")){setTab("recv");return;}
+  if(id&&DETAIL[t]){markTab(t);$("#view").className="";DETAIL[t](/^\d+$/.test(id)?Number(id):id);navHash(t+"/"+id);return;}
+  setTab(t);
+}
+window.addEventListener("hashchange",()=>{if(_routeLock){_routeLock=false;return;}route();});
 
 // ===== SKENOVANIE QR (kamera) =====
 let qrScanner=null,scanCb=null,torchOn=false;
@@ -253,8 +270,17 @@ function renderRecv(){
       <div class="row2"><div><label>Sklad</label><select id="r_wh" onchange="rFillLoc()">${DATA.warehouses.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("")}</select></div>
       <div><label>Pozícia</label><select id="r_loc"></select></div></div>
       <label>Evidencia</label><select id="r_track" onchange="rTrackUI()"><option value="unit">Kus (QR/SN)</option><option value="bulk">Množstvo (spotreb.)</option></select>
-      <div class="row2"><div><label>Stav</label><select id="r_state"><option value="new">nové</option><option value="used">použité</option><option value="refurb">repasované</option><option value="damaged">poškodené</option></select></div>
-      <div><label>Popis stavu</label><input id="r_note" placeholder="napr. plne funkčné"></div></div>
+      <div class="row2"><div><label>Stav</label><select id="r_state" onchange="rStatePreset()"><option value="new">nové</option><option value="used">použité</option><option value="refurb">repasované</option><option value="damaged">poškodené</option></select></div>
+      <div><label>Popis stavu</label><input id="r_note" list="r_note_presets" placeholder="vyber alebo napíš…">
+        <datalist id="r_note_presets">
+          <option value="nové – nerozbalené"></option>
+          <option value="nové – rozbalené, nepoužité"></option>
+          <option value="použité – 100% funkčné"></option>
+          <option value="repastované, 100% funkčné (ASIC)"></option>
+          <option value="repasované – otestované, 100% funkčné"></option>
+          <option value="použité – kozmetické oškretie, plne funkčné"></option>
+          <option value="poškodené – popíš závadu"></option>
+        </datalist></div></div>
       <div id="r_unitbox"><label>Sériové čísla — každé = jeden prijatý kus (napr. 10× ASIC = 10 SN)</label>
         <div id="r_serials"></div>
         <button class="btn ghost sm" type="button" onclick="rAddSerial()">+ Pridať sériové číslo / ďalší kus</button>
@@ -267,7 +293,7 @@ function renderRecv(){
       <label>Fotodokumentácia (voliteľné)</label>
       <div class="inline"><button class="btn ghost sm" onclick="rAddPhoto()">📷 Pridať fotku</button><span id="r_photocnt" class="muted"></span></div>
       <div id="r_photos" class="inline" style="flex-wrap:wrap;gap:6px;margin-top:6px"></div>
-      <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="r_again"> Prijať a pokračovať ďalším kusom (rovnaký produkt, iné SN)</label>
+      <label class="chk"><input type="checkbox" id="r_again"><span>Prijať a pokračovať ďalším kusom <span class="muted" style="font-weight:400">(rovnaký produkt, iné SN)</span></span></label>
       <button class="btn green" id="r_save" onclick="rSave()">✓ Prijať na sklad</button>
       <div id="r_msg"></div></div>`;
     rFillLoc();rRenderPhotos();recvSerials=[];rRenderSerials();
@@ -339,6 +365,10 @@ function recvNewProduct(){
 }
 function rFillLoc(){$("#r_loc").innerHTML=locsOf($("#r_wh").value).map(l=>`<option value="${l.id}">${esc(l.code)}${l.description?" — "+esc(l.description):""}</option>`).join("")||`<option value="">—</option>`;}
 function rTrackUI(){const b=$("#r_track").value==="bulk";$("#r_bulkbox").classList.toggle("hide",!b);$("#r_unitbox").classList.toggle("hide",b);}
+// predvyplní popis stavu podľa vybraného stavu (neprepíše vlastný text)
+const STATE_NOTE_DEFAULT={new:"nové – nerozbalené",used:"použité – 100% funkčné",refurb:"repasované – otestované, 100% funkčné",damaged:"poškodené – popíš závadu"};
+const STATE_NOTE_ALL=Object.values(STATE_NOTE_DEFAULT);
+function rStatePreset(){const n=$("#r_note");if(!n)return;const cur=n.value.trim();if(cur===""||STATE_NOTE_ALL.includes(cur)){n.value=STATE_NOTE_DEFAULT[$("#r_state").value]||"";}}
 let recvPhotos=[]; // [{url}]
 function rRenderPhotos(){const el=$("#r_photos");if(el)el.innerHTML=recvPhotos.map((p,i)=>`<span style="position:relative;display:inline-block"><img src="${esc(p.url)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--line)"><button onclick="recvPhotos.splice(${i},1);rRenderPhotos()" style="position:absolute;top:-6px;right:-6px;border:0;background:#e35;color:#fff;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px">×</button></span>`).join("");const c=$("#r_photocnt");if(c)c.textContent=recvPhotos.length?recvPhotos.length+" fotiek pripravených":"";}
 function rAddPhoto(){pickPhoto("lots",url=>{recvPhotos.push({url});rRenderPhotos();});}
@@ -403,8 +433,9 @@ async function loadRecvHistory(){
   if(error){el.innerHTML=`<span class="msg err">${esc(error.message)}</span>`;return;}
   if(!data||!data.length){el.textContent="Zatiaľ žiadne príjemky.";return;}
   el.innerHTML=`<div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Dátum</th><th>Produkt</th><th class="r">Ks</th><th>Sklad</th><th>SN</th><th>Doklad</th><th></th></tr></thead><tbody>`+
-    data.map(m=>`<tr><td>${esc((m.happened_at||"").replace("T"," ").slice(0,16))}</td><td>${esc((m.products&&m.products.name)||"?")}</td><td class="r">+${fmtNum(m.quantity)}</td><td>${esc((m.warehouses&&m.warehouses.name)||"—")}</td><td>${esc(m.serial||"—")}</td><td>${esc(m.document||"—")}</td>
-      <td style="white-space:nowrap"><button class="btn ghost sm" onclick="recvDuplicate(${m.id})">⧉ Duplikovať</button> <button class="btn red sm" onclick="recvDelete(${m.id},${m.lot_id||"null"},'${esc(m.happened_at||"")}')">🗑</button></td></tr>`).join("")+`</tbody></table></div>`;
+    data.map(m=>{const canDel=ME.role==="admin"||((Date.now()-new Date(m.happened_at).getTime())/60000)<=10;
+      return `<tr><td>${esc((m.happened_at||"").replace("T"," ").slice(0,16))}</td><td>${esc((m.products&&m.products.name)||"?")}</td><td class="r">+${fmtNum(m.quantity)}</td><td>${esc((m.warehouses&&m.warehouses.name)||"—")}</td><td>${esc(m.serial||"—")}</td><td>${esc(m.document||"—")}</td>
+      <td style="white-space:nowrap"><button class="btn ghost sm" onclick="recvDuplicate(${m.id})">⧉ Duplikovať</button>${canDel?` <button class="btn red sm" onclick="recvDelete(${m.id},${m.lot_id||"null"},'${esc(m.happened_at||"")}')">🗑</button>`:""}</td></tr>`;}).join("")+`</tbody></table></div>`;
 }
 // zmazať príjemku — users do 10 min od prijatia, admin bez limitu
 async function recvDelete(moveId,lotId,ts){
@@ -735,8 +766,10 @@ function renderPlacement(){
   const locRows=locs.map(l=>`<div class="inline" style="gap:6px;margin-bottom:6px;align-items:center"><input value="${esc(l.code)}" onchange="plEditLoc(${l.id},'code',this.value)" style="max-width:130px"><input value="${esc(l.description||"")}" placeholder="Popis pozície" onchange="plEditLoc(${l.id},'description',this.value)"><button class="btn red sm" onclick="plDelLoc(${l.id})">×</button></div>`).join("")||`<div class="muted" style="margin-bottom:6px">Žiadne pozície.</div>`;
   openModal(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h2>Rozmiestnenie skladu</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
     <label>Sklad</label><select onchange="plWh=this.value;renderPlacement()">${whOpts||'<option>—</option>'}</select>
-    <div class="inline" style="gap:6px;margin-top:8px"><input id="pl_newwh" placeholder="Nový sklad…"><button class="btn green sm" onclick="plAddWh()">+ Sklad</button>${w?`<button class="btn red sm" onclick="plDelWh()">Zmazať sklad</button>`:""}</div>
-    ${w?`<label style="margin-top:10px">Farba skladu (podfarbenie)</label><input type="color" value="${esc(w.color||'#3b6fd4')}" onchange="plColor(this.value)" style="width:70px;height:38px;padding:2px">`:""}
+    <div class="inline" style="gap:6px;margin-top:8px"><input id="pl_newwh" placeholder="Nový sklad (krátky názov)…"><button class="btn green sm" onclick="plAddWh()">+ Sklad</button>${w?`<button class="btn red sm" onclick="plDelWh()">Zmazať sklad</button>`:""}</div>
+    ${w?`<div class="row2" style="margin-top:10px"><div><label>Názov (krátky)</label><input value="${esc(w.name)}" onchange="plRenameWh(this.value)" placeholder="napr. Rostovská"></div>
+      <div><label>Adresa / popis (nepovinné)</label><input value="${esc(w.address||'')}" onchange="plSetAddr(this.value)" placeholder="napr. Rostovská 260/2b, Praha"></div></div>
+    <label style="margin-top:10px">Farba skladu (podfarbenie)</label><input type="color" value="${esc(w.color||'#3b6fd4')}" onchange="plColor(this.value)" style="width:70px;height:38px;padding:2px">`:""}
     <div style="display:flex;gap:6px;margin-top:14px"><div style="flex:0 0 130px" class="muted" style="font-size:12px">OZNAČENIE (KRÁTKE)</div><div class="muted" style="font-size:12px">POPIS POZÍCIE</div></div>
     <div id="pl_locs">${locRows}</div>
     <div class="inline" style="gap:6px;margin-top:6px"><input id="pl_code" placeholder="napr. R1-P3" style="max-width:130px"><input id="pl_desc" placeholder="Popis pozície"><button class="btn green sm" onclick="plAddLoc()">+ pozícia</button></div>
@@ -745,6 +778,8 @@ function renderPlacement(){
 async function plAddWh(){const n=$("#pl_newwh").value.trim();if(!n)return;const {data,error}=await sb.from("warehouses").insert({name:n}).select("id").single();if(error){alert(error.message);return;}await loadData();plWh=String(data.id);renderPlacement();}
 async function plDelWh(){const w=DATA.warehouses.find(x=>String(x.id)===String(plWh));if(!w)return;const {count}=await sb.from("stock_lots").select("id",{count:"exact",head:true}).eq("warehouse_id",w.id);if(count){alert("Na sklade je "+count+" položiek — najprv ich presuň/vydaj.");return;}if(!confirm('Zmazať sklad „'+w.name+'"?'))return;const {error}=await sb.from("warehouses").delete().eq("id",w.id);if(error){alert(error.message);return;}await loadData();plWh=DATA.warehouses[0]?String(DATA.warehouses[0].id):"";renderPlacement();}
 async function plColor(v){const {error}=await sb.from("warehouses").update({color:v}).eq("id",Number(plWh));if(error){alert(error.message);return;}await loadData();}
+async function plRenameWh(v){v=(v||"").trim();if(!v)return;const {error}=await sb.from("warehouses").update({name:v}).eq("id",Number(plWh));if(error){alert(error.message);return;}await loadData();renderPlacement();}
+async function plSetAddr(v){const {error}=await sb.from("warehouses").update({address:(v||"").trim()||null}).eq("id",Number(plWh));if(error){alert(error.message);return;}await loadData();}
 async function plAddLoc(){const code=$("#pl_code").value.trim();if(!code)return;const desc=$("#pl_desc").value.trim()||null;const {error}=await sb.from("warehouse_locations").insert({warehouse_id:Number(plWh),code,description:desc});if(error){alert(error.message);return;}await loadData();renderPlacement();}
 async function plEditLoc(id,field,val){const o={};o[field]=val.trim()||null;const {error}=await sb.from("warehouse_locations").update(o).eq("id",id);if(error){alert(error.message);}await loadData();}
 async function plDelLoc(id){const {count}=await sb.from("stock_lots").select("id",{count:"exact",head:true}).eq("location_id",id);if(count){alert("Na pozícii je "+count+" položiek.");return;}if(!confirm("Zmazať pozíciu?"))return;const {error}=await sb.from("warehouse_locations").delete().eq("id",id);if(error){alert(error.message);return;}await loadData();renderPlacement();}
@@ -818,7 +853,7 @@ function openModal(html){$("#modalCard").innerHTML=html;$("#modalOverlay").class
 function closeModal(){$("#modalOverlay").classList.add("hide");$("#modalCard").innerHTML="";if(tab==="stock")renderStock();}
 // klik na produkt -> detail (parametre, cena, šarže)
 function prodOpen(id){prodDetail(id);}
-function prodDetail(id){const p=DATA.products.find(x=>x.id===id);if(!p)return;
+function prodDetail(id){const p=DATA.products.find(x=>x.id===id);if(!p)return;navHash("prods/"+id);
   const tags=productTagNames(id).map(t=>`<span class="tag" style="background:#f3eefb;color:#5e37a6">#${esc(t)}</span>`).join(" ");
   const img=p.image_url?`<img src="${esc(p.image_url)}" style="max-width:220px;border-radius:10px;border:1px solid var(--line)">`:`<div class="muted">bez fotky</div>`;
   const row=(l,v)=>`<div class="lot"><div class="m">${esc(l)}</div><b>${v}</b></div>`;
@@ -1542,7 +1577,7 @@ async function shipSave(){
   $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Zásielka ${esc(trk)} uložená.</div>`);
 }
 let shipDetailId=null;
-async function shipDetail(id){
+async function shipDetail(id){navHash("ship/"+id);
   shipDetailId=id;
   const {data:s,error}=await sb.from("shipments").select("*").eq("id",id).single();
   if(error){alert(error.message);return;}
@@ -1829,7 +1864,7 @@ async function repairSave(id){
   setTab("repairs");
 }
 let repEventStage="";
-async function repairDetail(id){
+async function repairDetail(id){navHash("repairs/"+id);
   const {data:r,error}=await sb.from("repairs").select("*").eq("id",id).single();
   if(error){alert(error.message);return;}
   const {data:ph}=await sb.from("repair_photos").select("id,url").eq("repair_id",id).order("id");
@@ -2041,7 +2076,7 @@ async function assetFromLot(lotId){
   assetPrefill={product_id:l.product_id,_prodName:p.name||"",serial:l.serial||null,source_lot:l.id,state:"used"};
   assetForm(0);
 }
-async function assetDetail(id){
+async function assetDetail(id){navHash("assets/"+id);
   const {data:a,error}=await sb.from("assets").select("*").eq("id",id).single();
   if(error){alert(error.message);return;}
   const row=(l,v)=>(v!==null&&v!==undefined&&v!=="")?`<div class="lot"><div class="m">${esc(l)}</div><b>${esc(v)}</b></div>`:"";
