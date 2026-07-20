@@ -32,8 +32,10 @@ Deno.serve(async (req) => {
   try {
     const { tracking } = await req.json();
     if (!tracking) return json({ error: "Chýba tracking číslo." }, 400);
-    const key = Deno.env.get("DHL_API_KEY");
-    if (!key) return json({ found: false, error: "Chýba DHL_API_KEY (supabase secrets)." });
+    // Unified Tracking API sa autentifikuje IBA API kľúčom v hlavičke DHL-API-Key.
+    // Ber DHL_API_KEY, prípadne DHL_CLIENT_ID (= "API Key"/Consumer Key App-ky). Secret sa tu nepoužíva.
+    const key = Deno.env.get("DHL_API_KEY") || Deno.env.get("DHL_CLIENT_ID");
+    if (!key) return json({ found: false, error: "Chýba DHL_API_KEY (alebo DHL_CLIENT_ID) v supabase secrets." });
     const url = "https://api-eu.dhl.com/track/shipments?trackingNumber=" + encodeURIComponent(String(tracking).trim());
     const r = await fetch(url, { headers: { "DHL-API-Key": key, "Accept": "application/json" } });
     const d = await r.json();
