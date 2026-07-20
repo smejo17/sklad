@@ -207,10 +207,15 @@ function openScan(cb,opts){scanCb=cb;scanPrefer=(opts&&opts.prefer)||null;scanIg
   $("#zoomWrap").classList.add("hide");$("#torchBtn").style.display="none";
   qrScanner=new Html5Qrcode("reader");
   // vyššie rozlíšenie = malý kód má viac pixelov
-  const vc={facingMode:"environment",width:{ideal:1920},height:{ideal:1080}};
-  qrScanner.start(vc,{fps:12,qrbox:{width:270,height:180},formatsToSupport:getFmts()},
-    (txt,res)=>{const code=qrNormScan(txt);const fmt=res&&res.result&&res.result.format&&res.result.format.formatName;scanAccept(code,fmt);},()=>{})
-    .then(setupCamControls).catch(e=>{alert("Kamera sa nespustila: "+e);closeScan();});
+  const onScan=(txt,res)=>{const code=qrNormScan(txt);const fmt=res&&res.result&&res.result.format&&res.result.format.formatName;scanAccept(code,fmt);};
+  // prvý argument start() smie mať IBA 1 kľúč; rozlíšenie ide cez videoConstraints v konfigurácii
+  const cfg={fps:12,qrbox:{width:270,height:180},formatsToSupport:getFmts(),videoConstraints:{facingMode:"environment",width:{ideal:1920},height:{ideal:1080}}};
+  qrScanner.start({facingMode:"environment"},cfg,onScan,()=>{})
+    .then(setupCamControls)
+    .catch(()=>{ // fallback bez náročných constraints (prísnejšie prehliadače/zariadenia)
+      qrScanner.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:170},formatsToSupport:getFmts()},onScan,()=>{})
+        .then(setupCamControls).catch(e=>{alert("Kamera sa nespustila: "+e);closeScan();});
+    });
 }
 // spracuj naskenovaný kód so zohľadnením preferencie (EAN vs sériové číslo)
 function scanAccept(code,fmt){
