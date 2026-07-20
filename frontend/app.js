@@ -1532,7 +1532,7 @@ function shipForm(){
   const prodOpts=`<option value="">— produkt —</option>`+DATA.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
   const cur=c=>["CZK","EUR","USD","BTC"].map(x=>`<option ${c===x?"selected":""}>${x}</option>`).join("");
   $("#view").innerHTML=`<div class="card"><h2>Nová zásielka</h2>
-    <label>Sledovacie číslo (tracking)</label><div class="inline" style="flex-wrap:wrap;gap:6px"><input id="s_trk" placeholder="napr. 1Z… / CN…"><button class="btn ghost sm" onclick="openScan(t=>$('#s_trk').value=t,{qr:true})">📷</button><button class="btn sm" type="button" onclick="shipFormTrack()">🔍 Zistiť údaje</button><button class="btn ghost sm" type="button" onclick="shipLabelAddPhoto()">📷 Odfotiť štítok (AI)</button></div>
+    <label>Sledovacie číslo (tracking)</label><div class="inline" style="flex-wrap:wrap;gap:6px"><input id="s_trk" placeholder="napr. 1Z… / DR…C / CN…" oninput="shipAutoCarrier()"><button class="btn ghost sm" onclick="openScan(t=>$('#s_trk').value=t,{qr:true})">📷</button><button class="btn sm" type="button" onclick="shipFormTrack()">🔍 Zistiť údaje</button><button class="btn ghost sm" type="button" onclick="shipLabelAddPhoto()">📷 Odfotiť štítok (AI)</button></div>
     <div id="s_labeltray" style="margin-top:6px"></div>
     <div id="s_trkmsg" style="margin-top:6px"></div>
     <label>Prepravca</label><input id="s_carr" list="carrierList" placeholder="UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta…"><datalist id="carrierList"><option>UPS</option><option>FedEx</option><option>DHL Express</option><option>DHL Freight</option><option>GLS</option><option>PPL</option><option>Packeta</option><option>Česká pošta</option><option>Balíkovna</option></datalist>
@@ -1623,6 +1623,8 @@ async function shipLabelRecognize(){
       shipLabelPhotos=[];renderLabelTray();
     }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
 }
+// pri písaní tracking čísla sám rozpozná a predvyplní prepravcu (kým ho user nevyplní ručne)
+function shipAutoCarrier(){const c=$("#s_carr");if(c&&!c.value.trim()){const n=detectCarrierName("",$("#s_trk").value);if(n)c.value=n;}}
 async function shipFormTrack(){
   const trk=$("#s_trk").value.trim();if(!trk){alert("Zadaj tracking číslo.");return;}
   const cf=carrierFn($("#s_carr").value,trk);
@@ -1634,13 +1636,19 @@ async function shipFormTrack(){
     try{if(error&&error.context&&typeof error.context.json==="function"){const j=await error.context.json();if(j&&j.error)detail=j.error;}}catch(e){}
     if(box)box.innerHTML=`<div class="msg err">${esc(cf.name)} sledovanie zlyhalo.<br>Detail: ${esc(String(detail))}<br><span class="muted">Prepravca: ${esc(cf.name)} · funkcia <b>${esc(cf.fn)}</b> · secrets <b>${esc(carrierSecrets(cf.name))}</b>. Ak je prepravca iný, oprav pole „Prepravca".</span></div>`;return;}
   if(!$("#s_carr").value)$("#s_carr").value=cf.name;
+  const set=(id,v)=>{const el=$("#"+id);if(el&&v&&!el.value)el.value=v;};
   const pd=data.pod||{};
-  if(data.status&&!$("#s_status").value)$("#s_status").value=data.status;
-  if(data.eta&&!$("#s_eta").value)$("#s_eta").value=String(data.eta).slice(0,10);
-  if(pd.shipFromName&&!$("#s_send").value)$("#s_send").value=pd.shipFromName;
-  if(!$("#s_from").value)$("#s_from").value=[pd.shipFromName,pd.shipFromAddr].filter(Boolean).join(", ")||data.from||"";
-  if(!$("#s_to").value)$("#s_to").value=[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ")||data.to||"";
-  if(box)box.innerHTML=`<div class="msg ok">✓ ${esc(cf.name)}: ${esc(data.status||"")}${data.eta?" · ETA "+esc(data.eta):""}. Údaje predvyplnené — skontroluj a ulož.</div>`;
+  set("s_status",data.status);
+  if(data.eta)set("s_eta",String(data.eta).slice(0,10));
+  set("s_send",pd.shipFromName);
+  set("s_from",[pd.shipFromName,pd.shipFromAddr].filter(Boolean).join(", ")||data.from);
+  set("s_to",[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ")||data.to);
+  // dobierka → spôsob platby + suma
+  if(data.cod){const m=String(data.cod).match(/([\d.,]+)\s*([A-Za-z]{3})?/);
+    set("s_paymethod","dobierka");
+    if(m){set("s_amt",m[1].replace(",",".").replace(/\.(?=\d{3}\b)/g,""));if(m[2])set("s_cur",m[2].toUpperCase());}}
+  const bits=[data.status,data.delivered?("doručené"+(data.deliveredAt?" "+String(data.deliveredAt).slice(0,10):"")):"",data.cod?("dobierka "+data.cod):"",data.weight?("váha "+data.weight):"",data.eta?("ETA "+String(data.eta).slice(0,10)):"",(data.activity&&data.activity.length)?(data.activity.length+" udalostí"):""].filter(Boolean).join(" · ");
+  if(box)box.innerHTML=`<div class="msg ok">✓ ${esc(cf.name)}: ${esc(bits)}.<br><span class="muted">Predvyplnené. Celú históriu uvidíš po uložení cez „🔄 Zistiť stav" v detaile zásielky.</span></div>`;
 }
 let shipPendingSerial=null; // SN rozpoznané AI, ktoré sa pripne k ručne vybranej položke
 let shipLastLabels=null;    // posledný výsledok identify-labels (pre vytvorenie produktu)
