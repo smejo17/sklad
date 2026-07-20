@@ -1,0 +1,342 @@
+digraph ERD {
+  rankdir=LR;
+  graph [fontname="Helvetica", fontsize=11, splines=true, nodesep=0.35, ranksep=0.9, pad=0.4, bgcolor="white"];
+  node  [shape=plaintext, fontname="Helvetica", fontsize=9];
+  edge  [fontname="Helvetica", fontsize=8, color="#5b6472", arrowsize=0.7];
+
+  /* ================= AUTH / RBAC ================= */
+  subgraph cluster_auth {
+    label="PRÍSTUP  A  ROLE  (RBAC)";
+    style="rounded,filled"; fillcolor="#eef4ff"; color="#3b6fd4"; fontname="Helvetica-Bold"; fontsize=12;
+
+    users [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#3b6fd4"><font color="white"><b>users</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">full_name</td></tr>
+      <tr><td align="left">email (unique)</td></tr>
+      <tr><td align="left">password_hash</td></tr>
+      <tr><td align="left">is_active</td></tr>
+      <tr><td align="left">created_at</td></tr>
+      </table>>];
+
+    roles [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#3b6fd4"><font color="white"><b>roles</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">name</td></tr>
+      <tr><td align="left">description</td></tr>
+      <tr><td align="left">is_system (admin/user/visitor/external)</td></tr>
+      </table>>];
+
+    permissions [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#3b6fd4"><font color="white"><b>permissions</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">code (napr. product.edit)</td></tr>
+      <tr><td align="left">module (sklad/zasielky/system)</td></tr>
+      <tr><td align="left">description</td></tr>
+      </table>>];
+
+    role_permissions [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>role_permissions</b></td></tr>
+      <tr><td align="left"><b>role_id</b> FK</td></tr>
+      <tr><td align="left"><b>permission_id</b> FK</td></tr>
+      </table>>];
+
+    user_roles [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>user_roles</b></td></tr>
+      <tr><td align="left"><b>user_id</b> FK</td></tr>
+      <tr><td align="left"><b>role_id</b> FK</td></tr>
+      <tr><td align="left">module_scope (sklad/zasielky/oboje)</td></tr>
+      </table>>];
+
+    user_warehouse_access [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>user_warehouse_access</b></td></tr>
+      <tr><td align="left"><b>user_id</b> FK</td></tr>
+      <tr><td align="left"><b>warehouse_id</b> FK</td></tr>
+      </table>>];
+
+    api_clients [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#3b6fd4"><font color="white"><b>api_clients (external)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">name</td></tr>
+      <tr><td align="left">api_key_hash</td></tr>
+      <tr><td align="left"><b>role_id</b> FK</td></tr>
+      <tr><td align="left">allowed_ips / scope_json</td></tr>
+      <tr><td align="left">rate_limit, is_active</td></tr>
+      </table>>];
+  }
+
+  /* ================= SKLAD ================= */
+  subgraph cluster_wh {
+    label="SKLAD";
+    style="rounded,filled"; fillcolor="#eefaf0"; color="#2e9e5b"; fontname="Helvetica-Bold"; fontsize=12;
+
+    warehouses [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>warehouses</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">name</td></tr>
+      <tr><td align="left"><b>address_id</b> FK</td></tr>
+      <tr><td align="left">is_active</td></tr>
+      </table>>];
+
+    locations [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>locations (pozície)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>warehouse_id</b> FK</td></tr>
+      <tr><td align="left">code, name (napr. Regál A-03)</td></tr>
+      <tr><td align="left">parent_location_id (strom)</td></tr>
+      <tr><td align="left">pos_x, pos_y (vizualizácia)</td></tr>
+      </table>>];
+
+    categories [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>categories</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">name, parent_id</td></tr>
+      </table>>];
+
+    products [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>products (katalóg)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">sku, name, description</td></tr>
+      <tr><td align="left"><b>category_id</b> FK</td></tr>
+      <tr><td align="left">is_virtual, is_composite</td></tr>
+      <tr><td align="left">is_premium (skrytie)</td></tr>
+      </table>>];
+
+    product_images [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>product_images</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>product_id</b> FK</td></tr>
+      <tr><td align="left">path / url</td></tr>
+      <tr><td align="left">source (upload/internet)</td></tr>
+      <tr><td align="left">is_primary, sort_order</td></tr>
+      </table>>];
+
+    product_prices [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>product_prices (história)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>product_id</b> FK</td></tr>
+      <tr><td align="left">price, currency</td></tr>
+      <tr><td align="left">source (manual/internet)</td></tr>
+      <tr><td align="left"><b>set_by_user_id</b> FK, source_url</td></tr>
+      <tr><td align="left">valid_from, created_at</td></tr>
+      </table>>];
+
+    product_components [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>product_components (BOM)</b></td></tr>
+      <tr><td align="left"><b>parent_product_id</b> FK</td></tr>
+      <tr><td align="left"><b>component_product_id</b> FK</td></tr>
+      <tr><td align="left">quantity</td></tr>
+      </table>>];
+
+    inventory_units [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>inventory_units (kus)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>product_id</b> FK</td></tr>
+      <tr><td align="left"><b>warehouse_id</b> FK, <b>location_id</b> FK</td></tr>
+      <tr><td align="left">status (skladom/pending/na ceste/odpísané)</td></tr>
+      <tr><td align="left">expected_delivery_date</td></tr>
+      <tr><td align="left"><b>shipment_id</b> FK (nullable)</td></tr>
+      </table>>];
+
+    serial_numbers [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>serial_numbers</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>inventory_unit_id</b> FK</td></tr>
+      <tr><td align="left">serial, type</td></tr>
+      </table>>];
+
+    qr_codes [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>qr_codes</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK, code (unique)</td></tr>
+      <tr><td align="left"><b>batch_id</b> FK</td></tr>
+      <tr><td align="left">status (voľný/priradený/poškodený/pretlačený)</td></tr>
+      <tr><td align="left"><b>inventory_unit_id</b> FK (nullable)</td></tr>
+      </table>>];
+
+    qr_batches [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>qr_batches</b></td></tr>
+      <tr><td align="left"><b>id</b> PK, name, count</td></tr>
+      <tr><td align="left">printed_at, created_by</td></tr>
+      </table>>];
+
+    stock_levels [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>stock_levels (hromadné)</b></td></tr>
+      <tr><td align="left"><b>product_id</b> FK</td></tr>
+      <tr><td align="left"><b>warehouse_id</b> FK, <b>location_id</b> FK</td></tr>
+      <tr><td align="left">quantity</td></tr>
+      </table>>];
+
+    stock_movements [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#2e9e5b"><font color="white"><b>stock_movements</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>inventory_unit_id</b>/<b>product_id</b> FK</td></tr>
+      <tr><td align="left">from_loc, to_loc, from_wh, to_wh</td></tr>
+      <tr><td align="left">type (presun/transfer/príjem/výdaj/odpis)</td></tr>
+      <tr><td align="left"><b>user_id</b> FK, <b>shipment_id</b> FK</td></tr>
+      </table>>];
+
+    saved_filters [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td><b>saved_filters</b></td></tr>
+      <tr><td align="left"><b>id</b> PK, name</td></tr>
+      <tr><td align="left"><b>user_id</b>/<b>role_id</b> FK (nullable)</td></tr>
+      <tr><td align="left">definition_json, is_shared</td></tr>
+      </table>>];
+  }
+
+  /* ================= ZÁSIELKY ================= */
+  subgraph cluster_ship {
+    label="SLEDOVANIE  ZÁSIELOK";
+    style="rounded,filled"; fillcolor="#fff4ea"; color="#e08a1e"; fontname="Helvetica-Bold"; fontsize=12;
+
+    carriers [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>carriers</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK, name</td></tr>
+      <tr><td align="left">api_type, tracking_url_template</td></tr>
+      <tr><td align="left">api_config_json</td></tr>
+      </table>>];
+
+    shipments [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>shipments</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">tracking_number (unique)</td></tr>
+      <tr><td align="left"><b>carrier_id</b> FK</td></tr>
+      <tr><td align="left">direction (in/out), status, status_source</td></tr>
+      <tr><td align="left"><b>from_address_id</b>/<b>to_address_id</b> FK</td></tr>
+      <tr><td align="left">expected_delivery_date, delivered_at</td></tr>
+      <tr><td align="left">is_paid, <b>invoice_id</b> FK</td></tr>
+      <tr><td align="left"><b>replaced_by_shipment_id</b> FK (nullable)</td></tr>
+      </table>>];
+
+    shipment_events [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>shipment_events</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>shipment_id</b> FK</td></tr>
+      <tr><td align="left">status, description, location</td></tr>
+      <tr><td align="left">event_time, source (api/manual)</td></tr>
+      </table>>];
+
+    shipment_items [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>shipment_items</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>shipment_id</b> FK</td></tr>
+      <tr><td align="left"><b>product_id</b> / <b>inventory_unit_id</b> FK</td></tr>
+      <tr><td align="left">quantity</td></tr>
+      </table>>];
+
+    addresses [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>addresses</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">name, company, street, city, zip, country</td></tr>
+      <tr><td align="left">contact, phone, email</td></tr>
+      </table>>];
+
+    customs [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>customs_declarations</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>shipment_id</b> FK</td></tr>
+      <tr><td align="left">declaration_number, type (import/export)</td></tr>
+      <tr><td align="left">value, duty, vat, status</td></tr>
+      <tr><td align="left">document_path</td></tr>
+      </table>>];
+
+    invoices [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#e08a1e"><font color="white"><b>invoices</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK, number</td></tr>
+      <tr><td align="left">amount, currency, status, issued_at</td></tr>
+      </table>>];
+  }
+
+  /* ================= PRIEREZOVÉ ================= */
+  subgraph cluster_log {
+    label="LOGY  A  AUDIT";
+    style="rounded,filled"; fillcolor="#f3eefb"; color="#7a4fc0"; fontname="Helvetica-Bold"; fontsize=12;
+
+    audit_logs [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#7a4fc0"><font color="white"><b>audit_logs (zmeny)</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left">entity_type, entity_id, action</td></tr>
+      <tr><td align="left"><b>user_id</b>/<b>api_client_id</b> FK</td></tr>
+      <tr><td align="left">old_values, new_values, ip, created_at</td></tr>
+      </table>>];
+
+    activity_logs [label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="4" bgcolor="white">
+      <tr><td bgcolor="#7a4fc0"><font color="white"><b>activity_logs</b></font></td></tr>
+      <tr><td align="left"><b>id</b> PK</td></tr>
+      <tr><td align="left"><b>user_id</b> FK, action, context</td></tr>
+      <tr><td align="left">ip, created_at</td></tr>
+      </table>>];
+  }
+
+  /* ================= VZŤAHY ================= */
+  users -> user_roles [arrowhead=crow, arrowtail=none, dir=both];
+  roles -> user_roles [arrowhead=crow];
+  roles -> role_permissions [arrowhead=crow];
+  permissions -> role_permissions [arrowhead=crow];
+  users -> user_warehouse_access [arrowhead=crow];
+  warehouses -> user_warehouse_access [arrowhead=crow];
+  roles -> api_clients [arrowhead=crow];
+
+  warehouses -> locations [arrowhead=crow];
+  locations -> locations [arrowhead=crow, label="parent"];
+  warehouses -> addresses [arrowhead=none, style=dashed, label="address_id"];
+  categories -> products [arrowhead=crow];
+  products -> product_images [arrowhead=crow];
+  products -> product_prices [arrowhead=crow];
+  users -> product_prices [arrowhead=crow, style=dashed, label="set_by"];
+  products -> product_components [arrowhead=crow, label="parent"];
+  products -> product_components [arrowhead=crow, label="component"];
+  products -> inventory_units [arrowhead=crow];
+  warehouses -> inventory_units [arrowhead=crow];
+  locations -> inventory_units [arrowhead=crow];
+  inventory_units -> serial_numbers [arrowhead=crow];
+  inventory_units -> qr_codes [arrowhead=none, label="1:1"];
+  qr_batches -> qr_codes [arrowhead=crow];
+  products -> stock_levels [arrowhead=crow];
+  warehouses -> stock_levels [arrowhead=crow];
+  inventory_units -> stock_movements [arrowhead=crow];
+  users -> stock_movements [arrowhead=crow, style=dashed];
+  users -> saved_filters [arrowhead=crow, style=dashed];
+
+  carriers -> shipments [arrowhead=crow];
+  shipments -> shipment_events [arrowhead=crow];
+  shipments -> shipment_items [arrowhead=crow];
+  addresses -> shipments [arrowhead=crow, label="from/to"];
+  shipments -> customs [arrowhead=crow];
+  invoices -> shipments [arrowhead=none, style=dashed, label="invoice_id"];
+  shipments -> shipments [arrowhead=none, style=dashed, label="replaced_by"];
+
+  /* prepojenie modulov */
+  shipments -> inventory_units [arrowhead=crow, color="#c0392b", penwidth=1.6, label="doručenie -> položka"];
+  shipment_items -> inventory_units [arrowhead=none, style=dashed, color="#c0392b"];
+  stock_movements -> shipments [arrowhead=none, style=dashed, color="#c0392b"];
+}

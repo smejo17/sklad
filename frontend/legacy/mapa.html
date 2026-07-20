@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa aplikácie — Sklad & Zásielky</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f5f7fb;color:#1f2733;margin:0;padding:18px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#5b6472;margin-bottom:16px}
+  .card{background:#fff;border:1px solid #e2e8f2;border-radius:12px;padding:16px;margin-bottom:16px}
+  .mermaid{overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:6px 10px;border-bottom:1px solid #eef1f6;vertical-align:top}
+  th{font-size:12px;text-transform:uppercase;color:#8b97ac}
+  code{background:#eef4ff;color:#2a4fa0;padding:1px 6px;border-radius:6px;font-size:13px}
+  .grp{font-weight:700;color:#5e37a6;margin-top:10px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+<h1>🗺️ Mapa aplikácie — Sklad &amp; Zásielky</h1>
+<div class="sub">Prehľad všetkých stránok a ich častí. Keď chceš niečo zmeniť, napíš kód sekcie — napr. <code>Z3</code>, <code>PF-EAN</code>, <code>ZA-detail</code>.</div>
+
+<div class="card">
+<div class="mermaid">
+mindmap
+  root((Sklad &amp; Zásielky))
+    SKLAD
+      Príjem PR
+        Vyhľadať/sken PR1
+        Nový produkt PR2
+        AI z fotky PR3
+        Stav + SN + fotky PR4-6
+        História príjemiek PR7
+      Výdaj VY
+        Nájsť položku VY1
+        Vydať VY2
+      Zásoby Z
+        Akcie Z1
+        Filtre Z2
+        Uložené filtre Z3
+        Výber šarží Z4
+        Tabuľka+šarže Z5
+        Detail produktu PD
+      Produkty P
+        Filtre P2
+        Tabuľka P3
+        Formulár PF
+          EAN dohľadanie PF-EAN
+          Parametre PF2
+          Tagy PF5
+    ZÁSIELKY
+      Zoznam ZA1
+      Nová ZA2
+      Detail ZA-detail
+      Prepravcovia sync
+      UPS tracking
+    DOKLADY
+      Doklady DO
+      Tlač QR kódov QR
+        Zásobník QR2
+        Údržba QR3
+    ADMINISTRÁCIA
+      Kategórie a tagy KT
+        Parametre kat. KT4
+      Duplicity DU
+      Správa SP
+        Sklady/pozície
+        Role a oprávnenia
+      Rozmiestnenie RM
+</div>
+</div>
+
+<div class="card">
+<h3>Tok dát</h3>
+<div class="mermaid">
+flowchart LR
+  U[Používateľ] --> A[index.html<br/>appka]
+  A -->|čítanie/zápis| S[(Supabase<br/>PostgreSQL + RLS)]
+  A -->|EAN| L[edge: lookup-barcode] --> I[Icecat / UPCitemdb]
+  A -->|foto štítku| P[edge: identify-product] --> AI[Anthropic vision]
+  A -->|tracking| UT[edge: ups-track] --> UPS[UPS API]
+  CR{{Cron 2x denne}} --> RA[edge: ups-refresh-all] --> UPS
+  RA --> S
+</div>
+</div>
+
+<div class="card">
+<h3>Kódy sekcií → funkcie v kóde</h3>
+<table>
+<tr><th>Kód</th><th>Kde</th><th>Funkcia</th></tr>
+<tr><td>PR2</td><td>Príjem → Nový produkt</td><td><code>recvNewProduct</code> → <code>prodForm</code></td></tr>
+<tr><td>PR7</td><td>Príjem → História</td><td><code>loadRecvHistory</code></td></tr>
+<tr><td>Z2 / Z3</td><td>Zásoby → filtre / uložené</td><td><code>renderStock</code>, <code>sfSaveNew/sfLoad</code></td></tr>
+<tr><td>Z4</td><td>Zásoby → výber + hromadné</td><td><code>selLot</code>, <code>bulkIssue/bulkMove/bulkState</code></td></tr>
+<tr><td>Z5</td><td>Zásoby → šarža úprava</td><td><code>lotEdit</code>, <code>lotIssue</code></td></tr>
+<tr><td>PD</td><td>Detail produktu</td><td><code>prodDetail</code>, <code>prodChangePrice</code>, <code>prodFetchSpecs</code></td></tr>
+<tr><td>PF-EAN</td><td>Formulár → EAN</td><td><code>pScanBarcode/pLookupNow/pDoLookup</code></td></tr>
+<tr><td>PF2</td><td>Formulár → parametre</td><td><code>renderProdAttrs</code>, <code>attrDefsForCat</code></td></tr>
+<tr><td>ZA-detail</td><td>Zásielka → detail + položky</td><td><code>shipDetail</code>, <code>shipItemAdd</code>, <code>shipItemsToStock</code></td></tr>
+<tr><td>sync</td><td>Zásielky → Prepravcovia</td><td><code>shipCarriers</code>, <code>shipRefreshAll</code></td></tr>
+<tr><td>UPS</td><td>Zásielka → stav z UPS</td><td><code>shipUpsTrack</code> → edge <code>ups-track</code></td></tr>
+<tr><td>QR2/QR3</td><td>Tlač QR</td><td><code>renderQR</code>, <code>qrAddProduct</code>, <code>qrDeleteFree</code></td></tr>
+<tr><td>KT4</td><td>Kategórie → parametre</td><td><code>renderCats</code>, <code>caAdd/caDel</code></td></tr>
+<tr><td>DU</td><td>Duplicity</td><td><code>renderDupes</code>, <code>prodMerge</code></td></tr>
+<tr><td>SP</td><td>Správa → role</td><td><code>renderSettings</code>, <code>setRolePerm</code></td></tr>
+<tr><td>RM</td><td>Rozmiestnenie skladu</td><td><code>openPlacement</code>, <code>plAddLoc</code></td></tr>
+</table>
+<div class="sub" style="margin-top:10px">Podrobný textový rozpis je v súbore <code>STRUKTURA.md</code>.</div>
+</div>
+
+<script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
+</body>
+</html>

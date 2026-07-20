@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sklad &amp; Zásielky — prototyp</title>
+<style>
+  :root{--blue:#3b6fd4;--green:#2e9e5b;--orange:#e08a1e;--purple:#7a4fc0;--dark:#1f2733;--grey:#5b6472;--line:#e2e8f2;--bg:#f5f7fb;--card:#fff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--dark);font-size:14px}
+  .app{display:flex;min-height:100vh}
+  .side{width:238px;background:#111a2b;color:#c7d2e2;display:flex;flex-direction:column;position:fixed;height:100vh}
+  .side .brand{padding:18px 18px 12px;font-weight:700;color:#fff;font-size:15px;line-height:1.3;border-bottom:1px solid #22304a}
+  .side .brand small{display:block;font-weight:400;color:#8798b3;font-size:11px;margin-top:3px}
+  .nav{padding:10px 0;flex:1;overflow:auto}
+  .nav .grp{padding:12px 18px 4px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#6b7c9a}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 18px;color:#c7d2e2;text-decoration:none;cursor:pointer;border-left:3px solid transparent;font-size:13.5px}
+  .nav a:hover{background:#1a2740;color:#fff}
+  .nav a.active{background:#1a2740;color:#fff;border-left-color:var(--blue)}
+  .nav a .ic{width:18px;text-align:center}
+  .side .foot{padding:12px 18px;border-top:1px solid #22304a;font-size:12px;color:#8798b3}
+  .side .foot label{display:block;margin-bottom:4px}
+  .side .foot select{width:100%;margin-bottom:10px;background:#1a2740;color:#fff;border:1px solid #2b3a58;border-radius:6px;padding:6px}
+  .main{margin-left:238px;flex:1;padding:22px 26px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+  .head h1{font-size:21px;font-weight:700}
+  .head .sub{color:var(--grey);font-size:12.5px;margin-top:2px}
+  .btn{background:var(--blue);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:#fff;color:var(--dark);border:1px solid var(--line)}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+  .btn.danger{background:#d9534f}.btn.green{background:var(--green)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:22px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .kpi .n{font-size:26px;font-weight:700}.kpi .l{color:var(--grey);font-size:12.5px;margin-top:3px}.kpi .bar{height:3px;border-radius:3px;margin-top:12px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:visible;margin-bottom:20px}
+  .panel .ph{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  .panel .ph h3{font-size:14.5px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+  th{background:#f7f9fc;color:var(--grey);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+  tbody tr:hover{background:#f9fbfe}
+  .tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600}
+  .tag.g{background:#e4f6ea;color:#1d7d43}.tag.o{background:#fdf0df;color:#a8630c}.tag.b{background:#e6eefb;color:#2a4fa0}
+  .tag.gr{background:#eef1f6;color:#5b6472}.tag.r{background:#fde8e7;color:#b02a26}.tag.p{background:#f0e9fb;color:#5e37a6}
+  .muted{color:var(--grey)}
+  .link{color:var(--blue);cursor:pointer;font-weight:700}.link:hover{text-decoration:underline}
+  .thumb{width:36px;height:36px;border-radius:7px;object-fit:cover;background:#eef1f6;vertical-align:middle;cursor:zoom-in;border:1px solid var(--line)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .toolbar input,.toolbar select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;background:#fff}
+  .toolbar input[type=search]{min-width:220px}
+  .info{cursor:help;color:var(--blue);font-weight:700;border:1px solid var(--blue);border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;margin-left:5px}
+  .empty{padding:30px;text-align:center;color:var(--grey)}
+  .ov{position:fixed;inset:0;background:rgba(15,23,40,.5);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .ov.show{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:640px;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .modal .mh{padding:16px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:16px;display:flex;justify-content:space-between}
+  .modal .mb{padding:18px 20px}
+  .modal .mf{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:12px;color:var(--grey);margin-bottom:5px;font-weight:600}
+  .fld input,.fld select,.fld textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;font-family:inherit}
+  .fld textarea{min-height:70px;resize:vertical}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .x{cursor:pointer;color:var(--grey);font-size:20px;line-height:1}
+  .chk{display:flex;align-items:center;gap:8px}.chk input{width:auto}
+  .pill{font-size:11px;padding:2px 8px;border-radius:6px;background:#eef1f6;color:var(--grey)}
+  .crypto{color:var(--purple);font-weight:600}
+  .note{background:#fff8ec;border:1px solid #f3e2c0;color:#8a5a12;padding:10px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px}
+  .warn{background:#fde7e7;border:1px solid #f3c4c4;color:#9c2b2b}
+  .box{background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+  .box h4{font-size:12px;color:var(--grey);text-transform:uppercase;letter-spacing:.03em;margin-bottom:10px}
+  .sugg{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{border-radius:16px;padding:4px 11px;font-size:12px;cursor:pointer;border:1px solid #cfe0ff;background:#eef4ff;color:var(--blue)}
+  .chip:hover{background:#dbe8ff}
+  .chip.tag{border-color:#d9cef2;background:#f3eefb;color:#5e37a6}
+  .chip.tag.on{background:var(--purple);color:#fff;border-color:var(--purple)}
+  .comp-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .comp-row select{flex:1}.comp-row input{width:70px}
+  .dupitem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed #eadfc0}
+  .score{font-weight:700;border-radius:6px;padding:2px 8px;font-size:12px}
+  .attrgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid #f0f3f8;font-size:13px}
+  .kv .k{color:var(--grey)}
+  #imgprev{position:fixed;display:none;z-index:100;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+  #imgprev img{width:240px;height:240px;object-fit:contain;display:block;border-radius:6px;background:#f4f6fa}
+  #imgprev .cap{font-size:11px;color:var(--grey);text-align:center;padding-top:4px;max-width:240px}
+  .grp-row td{background:#eef4ff;color:var(--blue);font-weight:700}
+  .tagline{margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+  .tagline .t{font-size:10.5px;background:#f3eefb;color:#5e37a6;border-radius:10px;padding:1px 7px}
+  .detimg{width:100%;height:220px;object-fit:contain;background:#f4f6fa;border-radius:10px;border:1px solid var(--line);margin-bottom:12px}
+  /* tlač QR */
+  .qrsheet{display:flex;flex-wrap:wrap;gap:4mm;background:#fff;padding:6mm;border:1px solid var(--line);border-radius:8px}
+  .qrcell{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;page-break-inside:avoid}
+  .qrcell img{display:block;border:1px solid #eee}
+  .qrcell .qlbl{font-size:8pt;text-align:center;margin-top:1mm;max-width:34mm;word-break:break-word;line-height:1.1}
+  .qrcell.cut{border:1px dashed #9aa4b3;padding:2mm;border-radius:2px}
+  .qrsheet.cut{gap:0}
+  @media print{.side,.head,#qr_controls,.noprint{display:none!important}.main{margin:0!important;padding:0!important}.qrsheet{border:0;padding:0}.panel{border:0}}
+  @media(max-width:860px){.side{width:64px}.side .brand small,.nav .grp,.nav a span.t,.side .foot{display:none}.main{margin-left:64px}.nav a{justify-content:center}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand" id="brand"></div>
+    <nav class="nav" id="nav">
+      <div class="grp" data-t="nav.overview_grp"></div>
+      <a data-v="dash" class="active"><span class="ic">▦</span><span class="t" data-t="nav.dash"></span></a>
+      <div class="grp" data-t="nav.wh_grp"></div>
+      <a data-v="products"><span class="ic">📦</span><span class="t" data-t="nav.products"></span></a>
+      <a data-v="inventory"><span class="ic">🗄️</span><span class="t" data-t="nav.inventory"></span></a>
+      <a data-v="docs"><span class="ic">🧾</span><span class="t" data-t="nav.docs"></span></a>
+      <a data-v="stocktake"><span class="ic">📋</span><span class="t" data-t="nav.stocktake"></span></a>
+      <a data-v="assets"><span class="ic">🧰</span><span class="t" data-t="nav.assets"></span></a>
+      <a data-v="qr"><span class="ic">🏷️</span><span class="t" data-t="nav.qr"></span></a>
+      <div class="grp" data-t="nav.ship_grp"></div>
+      <a data-v="shipments"><span class="ic">🚚</span><span class="t" data-t="nav.shipments"></span></a>
+      <div class="grp" data-t="nav.admin_grp"></div>
+      <a data-v="dedup"><span class="ic">🧹</span><span class="t" data-t="nav.dedup"></span></a>
+      <a data-v="roles"><span class="ic">🔐</span><span class="t" data-t="nav.roles"></span></a>
+      <a data-v="users"><span class="ic">👤</span><span class="t" data-t="nav.users"></span></a>
+      <a data-v="currencies"><span class="ic">💱</span><span class="t" data-t="nav.currencies"></span></a>
+    </nav>
+    <div class="foot">
+      <label data-t="side.language"></label>
+      <select id="lang" onchange="app.setLang(this.value)"><option value="sk">Slovenčina</option><option value="cs">Čeština</option><option value="en">English</option></select>
+      <label data-t="side.loggedas"></label>
+      <select id="role" onchange="app.setRole(this.value)"><option value="admin">Admin</option><option value="user">User</option><option value="visitor">Visitor</option></select>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
+<div id="imgprev"><img><div class="cap"></div></div>
+
+<script>
+// ================= i18n =================
+const DICT={
+ sk:{
+  "app.title":"Sklad & Zásielky","app.subtitle":"prototyp · v1.1",
+  "nav.overview_grp":"Prehľad","nav.dash":"Prehľad","nav.wh_grp":"Sklad","nav.products":"Produkty","nav.inventory":"Zásoby",
+  "nav.ship_grp":"Zásielky","nav.shipments":"Zásielky","nav.admin_grp":"Administrácia","nav.dedup":"Duplicity","nav.roles":"Role & oprávnenia","nav.users":"Používatelia","nav.currencies":"Meny",
+  "side.language":"Jazyk","side.loggedas":"Prihlásený ako",
+  "c.edit":"Upraviť","c.delete":"Zmazať","c.save":"Uložiť","c.cancel":"Zrušiť","c.add":"Pridať","c.none":"—","c.reset":"↺ Reset dát","c.close":"Zavrieť",
+  "dash.title":"Prehľad","dash.sub":"Rýchly stav skladu a zásielok","dash.kpi_products":"Produkty","dash.kpi_units":"Kusy na sklade","dash.kpi_onway":"Na ceste","dash.kpi_ship":"Zásielky",
+  "dash.stock_by_wh":"Zásoby podľa skladu","dash.warehouse":"Sklad","dash.units_count":"Počet kusov","dash.recent":"Posledné zásielky","dash.tracking":"Tracking","dash.carrier":"Prepravca","dash.status":"Stav","dash.payment":"Platba",
+  "p.title":"Produkty","p.sub":"Katalóg · značka, kategórie, parametre podľa kategórie · kontrola duplicít","p.search":"Hľadať názov / SKU / alias / tag…","p.new":"+ Nový produkt",
+  "p.col_product":"Produkt","p.col_brand":"Značka","p.col_category":"Kategória","p.col_type":"Typ","p.col_price":"Orientačná nákupná cena","p.premium":"prémiový","p.premium_note":"Táto rola nevidí prémiové produkty.",
+  "p.filter_brand":"Všetky značky","p.filter_cat":"Všetky kategórie","p.filter_sub":"Všetky podkategórie","p.filter_tag":"Všetky tagy","p.alias":"alias",
+  "type.simple":"Jednoduchý","type.assembly":"Zostava","p.assembly_of":"komponentov",
+  "pf.new":"Nový produkt","pf.edit":"Upraviť produkt","pf.name":"Jednotný názov (kanonický)","pf.desc":"Krátky popis","pf.desc_ph":"stručne, do zoznamu",
+  "pf.desc_long":"Podrobný popis","pf.desc_long_ph":"celý popis zostavy / detailné info…",
+  "pf.builder":"Zostavenie jednotného názvu","pf.brand":"Značka","pf.newbrand":"➕ Nová značka…","pf.newbrand_prompt":"Názov novej značky:","pf.model":"Model","pf.spec":"Kľúčové parametre (do názvu)","pf.spec_ph":"napr. 16 GB, 3200 MHz","pf.build":"⟳ Zostaviť názov",
+  "pf.sku":"SKU","pf.category":"Kategória","pf.subcategory":"Podkategória","pf.none_sub":"— žiadna —","pf.newcat":"➕ Nová…","pf.newcat_prompt":"Názov novej kategórie:","pf.newsub_prompt":"Názov novej podkategórie:",
+  "pf.type":"Typ produktu","pf.price":"Orientačná nákupná cena","pf.currency":"Mena","pf.image":"URL obrázka",
+  "pf.attributes":"Parametre (podľa kategórie)","pf.no_attrs":"Pre túto kategóriu nie sú definované parametre. Vyber kategóriu s parametrami (napr. Káble, Pamäte, ASIC minery).",
+  "pf.tags":"Tagy (navrhované podľa kategórie)","pf.add_tag":"+ tag","pf.add_tag_prompt":"Nový tag:","pf.tag_dupe":"Podobný tag už existuje: „{x}\". Použiť existujúci namiesto nového?",
+  "pf.price_src":"Zdroj ceny","pf.src_manual":"Ručne","pf.src_internet":"Z internetu","pf.premium":"Prémiový produkt",
+  "pf.find_image":"🔎 Nájsť obrázok","pf.by_photo":"📷 Nájsť podľa fotky","pf.import":"⇩ Import z predajnej DB",
+  "pf.by_photo_note":"Prototyp: otvorí sa Google Lens, kam pretiahneš fotku. V ostrej verzii systém rozpozná produkt z fotky automaticky (AI) a predvyplní polia.",
+  "pf.import_note":"Prototyp: doplní ukážkové produkty z predajnej databázy (zdroj = sales-db). V ostrej verzii sa napojí reálne API predajného systému.",
+  "pf.dup_warn":"⚠ Možné duplicity — nemyslíš niektorý z týchto?","pf.open":"Použiť tento",
+  "pf.ai_note":"Kontrola duplicít, generátor názvu aj parametre podľa kategórie fungujú už tu. Rozpoznanie z fotky a import z predajnej DB sa napoja cez API/AI.",
+  "pf.components":"Zloženie zostavy","pf.add_component":"+ Pridať komponent","pf.no_components":"Zatiaľ žiadne komponenty.",
+  "info.by":"Cenu zadal","info.manual":"zadané ručne","info.internet":"automaticky z internetu","info.updated":"aktualizované",
+  "det.title":"Detail produktu","det.attributes":"Parametre","det.long":"Podrobný popis","det.tags":"Tagy","det.components":"Zloženie zostavy","det.source":"Zdroj","det.price":"Orientačná nákupná cena",
+  "dd.title":"Zlúčenie duplicít","dd.sub":"Systém našiel podozrivo podobné produkty. Skontroluj a zlúč, čo označuje to isté.","dd.none":"Nenašli sa podozrivé duplicity. 👍","dd.col_pair":"Podobný pár","dd.col_score":"Zhoda","dd.merge":"Zlúčiť",
+  "dd.merge_title":"Zlúčiť produkty","dd.keep":"Ponechať ako hlavný","dd.merge_note":"Druhý produkt sa zlúči do hlavného: názov ostane ako alias a zásoby aj zloženia sa presunú.","dd.confirm":"Zlúčiť",
+  "inv.title":"Zásoby","inv.sub":"Čo je na ktorom sklade · sériové čísla a QR","inv.new":"+ Príjem položky","inv.receive":"Prijať","inv.col_product":"Produkt","inv.col_wh":"Sklad","inv.col_loc":"Pozícia","inv.col_sn":"Sériové č.","inv.col_qr":"QR","inv.col_status":"Stav","inv.move":"Presunúť","inv.receive_title":"Príjem položky (skenovanie)","inv.receive_note":"V mobile: naskenuj sériové číslo a predpripravený QR — automaticky sa napária.","inv.move_title":"Presun / transfer položky","inv.target_wh":"Cieľový sklad","inv.new_loc":"Nová pozícia",
+  "sh.title":"Zásielky","sh.sub":"Sledovanie podľa tracking number · platba fiat aj krypto","sh.search":"Hľadať tracking / prepravca / adresa…","sh.new":"+ Nová zásielka","sh.col_route":"Trasa","sh.col_exp":"Očak.","sh.col_invoice":"Faktúra","sh.paid":"zaplatené","sh.unpaid":"nezaplatené","sh.nofaktura":"bez faktúry","sh.dir_in":"príjem","sh.dir_out":"výdaj","sh.form_note":"Zadaj tracking number — v ostrej verzii systém stiahne stav cez API prepravcu.","sh.carrier":"Prepravca","sh.dir":"Smer","sh.from":"Z adresy","sh.to":"Na adresu","sh.exp":"Očakávané doručenie","sh.inv":"Faktúra č.","sh.amt":"Suma platby","sh.cur":"Mena platby","sh.tx":"Hash krypto transakcie (ak krypto)","sh.paidchk":"Zaplatené",
+  "ro.title":"Role & oprávnenia","ro.sub":"Zaškrtávaním meníš, čo daná rola smie. Zmeny sa ukladajú okamžite.","ro.sub_ro":"Len admin môže meniť oprávnenia (zmeň rolu dole).","ro.reset":"Obnoviť predvolené","ro.col_perm":"Oprávnenie","ro.readonly":"Prihlásený ako {r} — matica je len na čítanie.",
+  "us.title":"Používatelia","us.sub":"Priraď rolu a rozsah.","us.sub_ro":"Prehľad používateľov.","us.col_user":"Používateľ","us.col_role":"Rola","us.col_scope":"Rozsah","us.col_state":"Stav","us.active":"aktívny","us.inactive":"neaktívny","us.nomanage":"Táto rola nemôže spravovať používateľov.","us.ext":"External / API klienti","us.ext_access":"Iba API dotazy na konkrétne položky (api.query)","us.col_name":"Názov","us.col_type":"Typ","us.col_access":"Prístup",
+  "cu.title":"Meny","cu.sub":"Primárna CZK · EUR, USD a krypto (BTC, LTC, KAS, USDT, USDC, DOGE)","cu.col_code":"Kód","cu.col_name":"Názov","cu.col_type":"Typ","cu.col_dec":"Desatinné","cu.col_state":"Stav","cu.crypto":"krypto","cu.fiat":"fiat","cu.primary":"primárna","cu.active":"aktívna","cu.off":"vypnutá","cu.setprimary":"Nastaviť primárnu","cu.enable":"Zapnúť","cu.disable":"Vypnúť"
+ },
+ cs:{
+  "app.title":"Sklad & Zásilky","app.subtitle":"prototyp · v1.1",
+  "nav.overview_grp":"Přehled","nav.dash":"Přehled","nav.wh_grp":"Sklad","nav.products":"Produkty","nav.inventory":"Zásoby","nav.ship_grp":"Zásilky","nav.shipments":"Zásilky","nav.admin_grp":"Administrace","nav.dedup":"Duplicity","nav.roles":"Role & oprávnění","nav.users":"Uživatelé","nav.currencies":"Měny",
+  "side.language":"Jazyk","side.loggedas":"Přihlášen jako",
+  "c.edit":"Upravit","c.delete":"Smazat","c.save":"Uložit","c.cancel":"Zrušit","c.add":"Přidat","c.none":"—","c.reset":"↺ Reset dat","c.close":"Zavřít",
+  "dash.title":"Přehled","dash.sub":"Rychlý stav skladu a zásilek","dash.kpi_products":"Produkty","dash.kpi_units":"Kusy na skladě","dash.kpi_onway":"Na cestě","dash.kpi_ship":"Zásilky","dash.stock_by_wh":"Zásoby podle skladu","dash.warehouse":"Sklad","dash.units_count":"Počet kusů","dash.recent":"Poslední zásilky","dash.tracking":"Tracking","dash.carrier":"Dopravce","dash.status":"Stav","dash.payment":"Platba",
+  "p.title":"Produkty","p.sub":"Katalog · značka, kategorie, parametry dle kategorie · kontrola duplicit","p.search":"Hledat název / SKU / alias / tag…","p.new":"+ Nový produkt",
+  "p.col_product":"Produkt","p.col_brand":"Značka","p.col_category":"Kategorie","p.col_type":"Typ","p.col_price":"Orientační nákupní cena","p.premium":"prémiový","p.premium_note":"Tato role nevidí prémiové produkty.",
+  "p.filter_brand":"Všechny značky","p.filter_cat":"Všechny kategorie","p.filter_sub":"Všechny podkategorie","p.filter_tag":"Všechny tagy","p.alias":"alias",
+  "type.simple":"Jednoduchý","type.assembly":"Sestava","p.assembly_of":"komponent",
+  "pf.new":"Nový produkt","pf.edit":"Upravit produkt","pf.name":"Jednotný název (kanonický)","pf.desc":"Krátký popis","pf.desc_ph":"stručně, do seznamu",
+  "pf.desc_long":"Podrobný popis","pf.desc_long_ph":"celý popis sestavy / detailní info…",
+  "pf.builder":"Sestavení jednotného názvu","pf.brand":"Značka","pf.newbrand":"➕ Nová značka…","pf.newbrand_prompt":"Název nové značky:","pf.model":"Model","pf.spec":"Klíčové parametry (do názvu)","pf.spec_ph":"např. 16 GB, 3200 MHz","pf.build":"⟳ Sestavit název",
+  "pf.sku":"SKU","pf.category":"Kategorie","pf.subcategory":"Podkategorie","pf.none_sub":"— žádná —","pf.newcat":"➕ Nová…","pf.newcat_prompt":"Název nové kategorie:","pf.newsub_prompt":"Název nové podkategorie:",
+  "pf.type":"Typ produktu","pf.price":"Orientační nákupní cena","pf.currency":"Měna","pf.image":"URL obrázku",
+  "pf.attributes":"Parametry (dle kategorie)","pf.no_attrs":"Pro tuto kategorii nejsou definovány parametry. Vyber kategorii s parametry (např. Kabely, Paměti, ASIC minery).",
+  "pf.tags":"Tagy (navržené dle kategorie)","pf.add_tag":"+ tag","pf.add_tag_prompt":"Nový tag:","pf.tag_dupe":"Podobný tag již existuje: „{x}\". Použít existující místo nového?",
+  "pf.price_src":"Zdroj ceny","pf.src_manual":"Ručně","pf.src_internet":"Z internetu","pf.premium":"Prémiový produkt",
+  "pf.find_image":"🔎 Najít obrázek","pf.by_photo":"📷 Najít podle fotky","pf.import":"⇩ Import z prodejní DB",
+  "pf.by_photo_note":"Prototyp: otevře se Google Lens, kam přetáhneš fotku. V ostré verzi systém rozpozná produkt z fotky automaticky (AI) a předvyplní pole.",
+  "pf.import_note":"Prototyp: doplní ukázkové produkty z prodejní databáze (zdroj = sales-db). V ostré verzi se napojí reálné API prodejního systému.",
+  "pf.dup_warn":"⚠ Možné duplicity — nemyslíš některý z těchto?","pf.open":"Použít tento",
+  "pf.ai_note":"Kontrola duplicit, generátor názvu i parametry dle kategorie fungují už zde. Rozpoznání z fotky a import z prodejní DB se napojí přes API/AI.",
+  "pf.components":"Složení sestavy","pf.add_component":"+ Přidat komponent","pf.no_components":"Zatím žádné komponenty.",
+  "info.by":"Cenu zadal","info.manual":"zadáno ručně","info.internet":"automaticky z internetu","info.updated":"aktualizováno",
+  "det.title":"Detail produktu","det.attributes":"Parametry","det.long":"Podrobný popis","det.tags":"Tagy","det.components":"Složení sestavy","det.source":"Zdroj","det.price":"Orientační nákupní cena",
+  "dd.title":"Sloučení duplicit","dd.sub":"Systém našel podezřele podobné produkty. Zkontroluj a sluč, co označuje totéž.","dd.none":"Nenašly se podezřelé duplicity. 👍","dd.col_pair":"Podobný pár","dd.col_score":"Shoda","dd.merge":"Sloučit",
+  "dd.merge_title":"Sloučit produkty","dd.keep":"Ponechat jako hlavní","dd.merge_note":"Druhý produkt se sloučí do hlavního: název zůstane jako alias a zásoby i složení se přesunou.","dd.confirm":"Sloučit",
+  "inv.title":"Zásoby","inv.sub":"Co je na kterém skladě · sériová čísla a QR","inv.new":"+ Příjem položky","inv.receive":"Přijmout","inv.col_product":"Produkt","inv.col_wh":"Sklad","inv.col_loc":"Pozice","inv.col_sn":"Sériové č.","inv.col_qr":"QR","inv.col_status":"Stav","inv.move":"Přesunout","inv.receive_title":"Příjem položky (skenování)","inv.receive_note":"V mobilu: naskenuj sériové číslo a předpřipravený QR — automaticky se spárují.","inv.move_title":"Přesun / transfer položky","inv.target_wh":"Cílový sklad","inv.new_loc":"Nová pozice",
+  "sh.title":"Zásilky","sh.sub":"Sledování dle tracking number · platba fiat i krypto","sh.search":"Hledat tracking / dopravce / adresu…","sh.new":"+ Nová zásilka","sh.col_route":"Trasa","sh.col_exp":"Oček.","sh.col_invoice":"Faktura","sh.paid":"zaplaceno","sh.unpaid":"nezaplaceno","sh.nofaktura":"bez faktury","sh.dir_in":"příjem","sh.dir_out":"výdej","sh.form_note":"Zadej tracking number — v ostré verzi systém stáhne stav přes API dopravce.","sh.carrier":"Dopravce","sh.dir":"Směr","sh.from":"Z adresy","sh.to":"Na adresu","sh.exp":"Očekávané doručení","sh.inv":"Faktura č.","sh.amt":"Částka platby","sh.cur":"Měna platby","sh.tx":"Hash krypto transakce (pokud krypto)","sh.paidchk":"Zaplaceno",
+  "ro.title":"Role & oprávnění","ro.sub":"Zaškrtáváním měníš, co daná role smí. Změny se ukládají okamžitě.","ro.sub_ro":"Jen admin může měnit oprávnění (změň roli dole).","ro.reset":"Obnovit výchozí","ro.col_perm":"Oprávnění","ro.readonly":"Přihlášen jako {r} — matice je jen ke čtení.",
+  "us.title":"Uživatelé","us.sub":"Přiřaď roli a rozsah.","us.sub_ro":"Přehled uživatelů.","us.col_user":"Uživatel","us.col_role":"Role","us.col_scope":"Rozsah","us.col_state":"Stav","us.active":"aktivní","us.inactive":"neaktivní","us.nomanage":"Tato role nemůže spravovat uživatele.","us.ext":"External / API klienti","us.ext_access":"Jen API dotazy na konkrétní položky (api.query)","us.col_name":"Název","us.col_type":"Typ","us.col_access":"Přístup",
+  "cu.title":"Měny","cu.sub":"Primární CZK · EUR, USD a krypto (BTC, LTC, KAS, USDT, USDC, DOGE)","cu.col_code":"Kód","cu.col_name":"Název","cu.col_type":"Typ","cu.col_dec":"Desetinná","cu.col_state":"Stav","cu.crypto":"krypto","cu.fiat":"fiat","cu.primary":"primární","cu.active":"aktivní","cu.off":"vypnutá","cu.setprimary":"Nastavit primární","cu.enable":"Zapnout","cu.disable":"Vypnout"
+ },
+ en:{
+  "app.title":"Warehouse & Shipping","app.subtitle":"prototype · v0.4",
+  "nav.overview_grp":"Overview","nav.dash":"Dashboard","nav.wh_grp":"Warehouse","nav.products":"Products","nav.inventory":"Inventory","nav.ship_grp":"Shipping","nav.shipments":"Shipments","nav.admin_grp":"Administration","nav.dedup":"Duplicates","nav.roles":"Roles & permissions","nav.users":"Users","nav.currencies":"Currencies",
+  "side.language":"Language","side.loggedas":"Logged in as",
+  "c.edit":"Edit","c.delete":"Delete","c.save":"Save","c.cancel":"Cancel","c.add":"Add","c.none":"—","c.reset":"↺ Reset data","c.close":"Close",
+  "dash.title":"Dashboard","dash.sub":"Quick warehouse & shipping status","dash.kpi_products":"Products","dash.kpi_units":"Units in stock","dash.kpi_onway":"In transit","dash.kpi_ship":"Shipments","dash.stock_by_wh":"Stock by warehouse","dash.warehouse":"Warehouse","dash.units_count":"Units","dash.recent":"Recent shipments","dash.tracking":"Tracking","dash.carrier":"Carrier","dash.status":"Status","dash.payment":"Payment",
+  "p.title":"Products","p.sub":"Catalog · brand, categories, per-category attributes · duplicate check","p.search":"Search name / SKU / alias / tag…","p.new":"+ New product",
+  "p.col_product":"Product","p.col_brand":"Brand","p.col_category":"Category","p.col_type":"Type","p.col_price":"Est. purchase price","p.premium":"premium","p.premium_note":"This role can't see premium products.",
+  "p.filter_brand":"All brands","p.filter_cat":"All categories","p.filter_sub":"All subcategories","p.filter_tag":"All tags","p.alias":"alias",
+  "type.simple":"Simple","type.assembly":"Assembly","p.assembly_of":"components",
+  "pf.new":"New product","pf.edit":"Edit product","pf.name":"Unified name (canonical)","pf.desc":"Short description","pf.desc_ph":"brief, for the list",
+  "pf.desc_long":"Detailed description","pf.desc_long_ph":"full assembly description / detailed info…",
+  "pf.builder":"Unified name builder","pf.brand":"Brand","pf.newbrand":"➕ New brand…","pf.newbrand_prompt":"New brand name:","pf.model":"Model","pf.spec":"Key specs (for name)","pf.spec_ph":"e.g. 16 GB, 3200 MHz","pf.build":"⟳ Build name",
+  "pf.sku":"SKU","pf.category":"Category","pf.subcategory":"Subcategory","pf.none_sub":"— none —","pf.newcat":"➕ New…","pf.newcat_prompt":"New category name:","pf.newsub_prompt":"New subcategory name:",
+  "pf.type":"Product type","pf.price":"Est. purchase price","pf.currency":"Currency","pf.image":"Image URL",
+  "pf.attributes":"Attributes (by category)","pf.no_attrs":"No attributes defined for this category. Pick a category with attributes (e.g. Cables, Memory, ASIC miners).",
+  "pf.tags":"Tags (suggested by category)","pf.add_tag":"+ tag","pf.add_tag_prompt":"New tag:","pf.tag_dupe":"A similar tag already exists: \"{x}\". Use the existing one instead?",
+  "pf.price_src":"Price source","pf.src_manual":"Manual","pf.src_internet":"From internet","pf.premium":"Premium product",
+  "pf.find_image":"🔎 Find image","pf.by_photo":"📷 Find by photo","pf.import":"⇩ Import from sales DB",
+  "pf.by_photo_note":"Prototype: opens Google Lens where you drop the photo. In production the system recognizes the product from a photo automatically (AI) and prefills fields.",
+  "pf.import_note":"Prototype: adds sample products from the sales database (source = sales-db). In production it connects to the real sales system API.",
+  "pf.dup_warn":"⚠ Possible duplicates — did you mean one of these?","pf.open":"Use this one",
+  "pf.ai_note":"Duplicate check, name builder and per-category attributes already work here. Photo recognition and sales-DB import will connect via API/AI.",
+  "pf.components":"Assembly composition","pf.add_component":"+ Add component","pf.no_components":"No components yet.",
+  "info.by":"Price set by","info.manual":"entered manually","info.internet":"auto from internet","info.updated":"updated",
+  "det.title":"Product detail","det.attributes":"Attributes","det.long":"Detailed description","det.tags":"Tags","det.components":"Assembly composition","det.source":"Source","det.price":"Est. purchase price",
+  "dd.title":"Merge duplicates","dd.sub":"The system found suspiciously similar products. Review and merge the ones that mean the same thing.","dd.none":"No suspicious duplicates found. 👍","dd.col_pair":"Similar pair","dd.col_score":"Match","dd.merge":"Merge",
+  "dd.merge_title":"Merge products","dd.keep":"Keep as primary","dd.merge_note":"The second product is merged into the primary: its name is kept as an alias and inventory and composition move over.","dd.confirm":"Merge",
+  "inv.title":"Inventory","inv.sub":"What's in which warehouse · serials and QR","inv.new":"+ Receive item","inv.receive":"Receive","inv.col_product":"Product","inv.col_wh":"Warehouse","inv.col_loc":"Location","inv.col_sn":"Serial","inv.col_qr":"QR","inv.col_status":"Status","inv.move":"Move","inv.receive_title":"Receive item (scanning)","inv.receive_note":"On mobile: scan the serial number and a pre-printed QR — they pair automatically.","inv.move_title":"Move / transfer item","inv.target_wh":"Target warehouse","inv.new_loc":"New location",
+  "sh.title":"Shipments","sh.sub":"Tracking by number · fiat and crypto payment","sh.search":"Search tracking / carrier / address…","sh.new":"+ New shipment","sh.col_route":"Route","sh.col_exp":"ETA","sh.col_invoice":"Invoice","sh.paid":"paid","sh.unpaid":"unpaid","sh.nofaktura":"no invoice","sh.dir_in":"inbound","sh.dir_out":"outbound","sh.form_note":"Enter the tracking number — production fetches status via the carrier API.","sh.carrier":"Carrier","sh.dir":"Direction","sh.from":"From address","sh.to":"To address","sh.exp":"Expected delivery","sh.inv":"Invoice no.","sh.amt":"Payment amount","sh.cur":"Payment currency","sh.tx":"Crypto tx hash (if crypto)","sh.paidchk":"Paid",
+  "ro.title":"Roles & permissions","ro.sub":"Toggle what each role may do. Changes save instantly.","ro.sub_ro":"Only admin can change permissions (switch role below).","ro.reset":"Restore defaults","ro.col_perm":"Permission","ro.readonly":"Logged in as {r} — matrix is read-only.",
+  "us.title":"Users","us.sub":"Assign role and scope.","us.sub_ro":"User overview.","us.col_user":"User","us.col_role":"Role","us.col_scope":"Scope","us.col_state":"State","us.active":"active","us.inactive":"inactive","us.nomanage":"This role can't manage users.","us.ext":"External / API clients","us.ext_access":"API queries on specific items only (api.query)","us.col_name":"Name","us.col_type":"Type","us.col_access":"Access",
+  "cu.title":"Currencies","cu.sub":"Primary CZK · EUR, USD and crypto (BTC, LTC, KAS, USDT, USDC, DOGE)","cu.col_code":"Code","cu.col_name":"Name","cu.col_type":"Type","cu.col_dec":"Decimals","cu.col_state":"State","cu.crypto":"crypto","cu.fiat":"fiat","cu.primary":"primary","cu.active":"active","cu.off":"off","cu.setprimary":"Set primary","cu.enable":"Enable","cu.disable":"Disable"
+ }
+};
+// dodatočné preklady pre modul Zásoby v0.5 + náznak sťahovania parametrov
+const IV={
+ sk:{
+  "iv.new_lot":"+ Príjem na sklad","iv.receive":"Prijať","iv.search":"Hľadať produkt / SN / QR / pozíciu…",
+  "iv.filter_wh":"Všetky sklady","iv.filter_loc":"Všetky pozície","iv.filter_cat":"Všetky kategórie","iv.filter_state":"Všetky stavy",
+  "iv.product":"Produkt","iv.wh":"Sklad","iv.loc":"Pozícia","iv.qty":"Množstvo / kus","iv.state":"Stav","iv.buy":"Nákup (cena / dátum / faktúra)","iv.actions":"",
+  "iv.total":"Spolu","iv.lots":"šarží","iv.places":"miest","iv.state_new":"nové","iv.state_used":"staré","iv.state_note":"Popis stavu","iv.counted":"spočítané",
+  "iv.track":"Sledovanie","iv.track_unit":"Kus (QR/SN na tovare)","iv.track_bulk":"Množstvo (QR na bedni)","iv.serial":"Sériové č.","iv.qr":"QR kód","iv.buy_price":"Nákupná cena","iv.buy_date":"Dátum nákupu","iv.invoice":"Faktúra č.",
+  "iv.selected":"{n} vybraných","iv.select_all":"Označiť filtrované","iv.clear_sel":"Zrušiť výber","iv.bulk_move":"Presunúť vybrané","iv.bulk_state":"Zmeniť stav","iv.bulk_count":"Označiť spočítané",
+  "iv.move_title":"Hromadný presun","iv.target_wh":"Cieľový sklad","iv.target_loc":"Cieľová pozícia","iv.state_title":"Hromadná zmena stavu",
+  "iv.myfilter":"Uložené filtre…","iv.save_filter":"💾 Uložiť filter","iv.save_filter_prompt":"Názov filtra:","iv.del_filter":"Zmazať filter „{x}\"?",
+  "iv.manage_loc":"🗺 Rozmiestnenie","iv.loc_title":"Rozmiestnenie skladu","iv.add_loc":"+ pozícia","iv.add_loc_prompt":"Názov novej pozície:","iv.receive_note":"Väčší/drahý tovar = QR na kuse. Spotrebný materiál = množstvo, QR len na bedni.",
+  "pf.fetch_params":"⭳ Stiahnuť parametre z internetu","pf.fetch_params_note":"Prototyp: v ostrej verzii systém stiahne parametre z internetu a overí ich vo viacerých obchodoch (AI). Tu vyplň ručne."
+ },
+ cs:{
+  "iv.new_lot":"+ Příjem na sklad","iv.receive":"Přijmout","iv.search":"Hledat produkt / SN / QR / pozici…",
+  "iv.filter_wh":"Všechny sklady","iv.filter_loc":"Všechny pozice","iv.filter_cat":"Všechny kategorie","iv.filter_state":"Všechny stavy",
+  "iv.product":"Produkt","iv.wh":"Sklad","iv.loc":"Pozice","iv.qty":"Množství / kus","iv.state":"Stav","iv.buy":"Nákup (cena / datum / faktura)","iv.actions":"",
+  "iv.total":"Celkem","iv.lots":"šarží","iv.places":"míst","iv.state_new":"nové","iv.state_used":"staré","iv.state_note":"Popis stavu","iv.counted":"spočítáno",
+  "iv.track":"Sledování","iv.track_unit":"Kus (QR/SN na zboží)","iv.track_bulk":"Množství (QR na bedně)","iv.serial":"Sériové č.","iv.qr":"QR kód","iv.buy_price":"Nákupní cena","iv.buy_date":"Datum nákupu","iv.invoice":"Faktura č.",
+  "iv.selected":"{n} vybraných","iv.select_all":"Označit filtrované","iv.clear_sel":"Zrušit výběr","iv.bulk_move":"Přesunout vybrané","iv.bulk_state":"Změnit stav","iv.bulk_count":"Označit spočítané",
+  "iv.move_title":"Hromadný přesun","iv.target_wh":"Cílový sklad","iv.target_loc":"Cílová pozice","iv.state_title":"Hromadná změna stavu",
+  "iv.myfilter":"Uložené filtry…","iv.save_filter":"💾 Uložit filtr","iv.save_filter_prompt":"Název filtru:","iv.del_filter":"Smazat filtr „{x}\"?",
+  "iv.manage_loc":"🗺 Rozmístění","iv.loc_title":"Rozmístění skladu","iv.add_loc":"+ pozice","iv.add_loc_prompt":"Název nové pozice:","iv.receive_note":"Větší/dražší zboží = QR na kuse. Spotřební materiál = množství, QR jen na bedně.",
+  "pf.fetch_params":"⭳ Stáhnout parametry z internetu","pf.fetch_params_note":"Prototyp: v ostré verzi systém stáhne parametry z internetu a ověří je ve více obchodech (AI). Zde vyplň ručně."
+ },
+ en:{
+  "iv.new_lot":"+ Receive stock","iv.receive":"Receive","iv.search":"Search product / SN / QR / location…",
+  "iv.filter_wh":"All warehouses","iv.filter_loc":"All locations","iv.filter_cat":"All categories","iv.filter_state":"All states",
+  "iv.product":"Product","iv.wh":"Warehouse","iv.loc":"Location","iv.qty":"Quantity / unit","iv.state":"State","iv.buy":"Purchase (price / date / invoice)","iv.actions":"",
+  "iv.total":"Total","iv.lots":"lots","iv.places":"places","iv.state_new":"new","iv.state_used":"used","iv.state_note":"State note","iv.counted":"counted",
+  "iv.track":"Tracking","iv.track_unit":"Unit (QR/SN on item)","iv.track_bulk":"Quantity (QR on box)","iv.serial":"Serial no.","iv.qr":"QR code","iv.buy_price":"Purchase price","iv.buy_date":"Purchase date","iv.invoice":"Invoice no.",
+  "iv.selected":"{n} selected","iv.select_all":"Select filtered","iv.clear_sel":"Clear selection","iv.bulk_move":"Move selected","iv.bulk_state":"Change state","iv.bulk_count":"Mark counted",
+  "iv.move_title":"Bulk move","iv.target_wh":"Target warehouse","iv.target_loc":"Target location","iv.state_title":"Bulk state change",
+  "iv.myfilter":"Saved filters…","iv.save_filter":"💾 Save filter","iv.save_filter_prompt":"Filter name:","iv.del_filter":"Delete filter \"{x}\"?",
+  "iv.manage_loc":"🗺 Layout","iv.loc_title":"Warehouse layout","iv.add_loc":"+ location","iv.add_loc_prompt":"New location name:","iv.receive_note":"Larger/expensive goods = QR on the item. Consumables = quantity, QR only on the box.",
+  "pf.fetch_params":"⭳ Fetch specs from internet","pf.fetch_params_note":"Prototype: in production the system fetches specs online and verifies them across multiple shops (AI). Fill in manually here."
+ }
+};
+let lang=localStorage.getItem("skladapp_lang")||"sk";
+for(const L in IV)Object.assign(DICT[L],IV[L]);
+function t(k,vars){let s=(DICT[lang]&&DICT[lang][k])||DICT.sk[k]||k;if(vars)for(const v in vars)s=s.split("{"+v+"}").join(vars[v]);return s;}
+// --- v0.6 doplnkové kľúče ---
+Object.assign(DICT.sk,{
+ "iv.clear_filters":"✕ Zrušiť filtre","iv.filter_active":"● Filter aktívny — nevidíš všetky zásoby","iv.transit":"na ceste","iv.note":"Skladová poznámka (napr. rezervované)",
+ "iv.loc_code":"Označenie (krátke)","iv.loc_desc":"Popis pozície","iv.loc_occupied":"Na pozícii „{c}\" je {n} položiek. Najprv ich presuň.","iv.loc_del_confirm":"Naozaj zmazať pozíciu „{c}\"?",
+ "rc.title":"Príjem na sklad","rc.search":"Napíš produkt (napr. ASIC Kaspa)…","rc.by_photo":"📷 Nájsť podľa fotky","rc.no_match":"Žiadny produkt — skús inak alebo pridaj nový.","rc.chosen":"Vybraný produkt","rc.change":"zmeniť","rc.serial_photo":"📷 Odfotiť SN","rc.more_photos":"📷 Ďalšie fotky produktu","rc.place":"✓ Umiestniť do skladu","rc.wh_pos":"Sklad a pozícia","rc.qty":"Množstvo","rc.photo_note":"Prototyp: v ostrej verzii odfotíš názov alebo tovar a AI dohľadá produkt. Tu ho vyber zo zoznamu.","rc.serial_note":"Prototyp: v ostrej verzii sa SN načíta z fotky (OCR). Tu zadaj ručne.","rc.photos_added":"Fotky pripravené (v prototype sa neukladajú)."
+});
+Object.assign(DICT.cs,{
+ "iv.clear_filters":"✕ Zrušit filtry","iv.filter_active":"● Filtr aktivní — nevidíš všechny zásoby","iv.transit":"na cestě","iv.note":"Skladová poznámka (např. rezervováno)",
+ "iv.loc_code":"Označení (krátké)","iv.loc_desc":"Popis pozice","iv.loc_occupied":"Na pozici „{c}\" je {n} položek. Nejdřív je přesuň.","iv.loc_del_confirm":"Opravdu smazat pozici „{c}\"?",
+ "rc.title":"Příjem na sklad","rc.search":"Napiš produkt (např. ASIC Kaspa)…","rc.by_photo":"📷 Najít podle fotky","rc.no_match":"Žádný produkt — zkus jinak nebo přidej nový.","rc.chosen":"Vybraný produkt","rc.change":"změnit","rc.serial_photo":"📷 Vyfotit SN","rc.more_photos":"📷 Další fotky produktu","rc.place":"✓ Umístit do skladu","rc.wh_pos":"Sklad a pozice","rc.qty":"Množství","rc.photo_note":"Prototyp: v ostré verzi vyfotíš název nebo zboží a AI dohledá produkt. Zde ho vyber ze seznamu.","rc.serial_note":"Prototyp: v ostré verzi se SN načte z fotky (OCR). Zde zadej ručně.","rc.photos_added":"Fotky připraveny (v prototypu se neukládají)."
+});
+Object.assign(DICT.en,{
+ "iv.clear_filters":"✕ Clear filters","iv.filter_active":"● Filter active — not showing all stock","iv.transit":"in transit","iv.note":"Stock note (e.g. reserved)",
+ "iv.loc_code":"Label (short)","iv.loc_desc":"Position description","iv.loc_occupied":"Position \"{c}\" has {n} items. Move them first.","iv.loc_del_confirm":"Really delete position \"{c}\"?",
+ "rc.title":"Receive to warehouse","rc.search":"Type product (e.g. ASIC Kaspa)…","rc.by_photo":"📷 Find by photo","rc.no_match":"No product — try again or add new.","rc.chosen":"Selected product","rc.change":"change","rc.serial_photo":"📷 Photo serial","rc.more_photos":"📷 More product photos","rc.place":"✓ Place in warehouse","rc.wh_pos":"Warehouse and position","rc.qty":"Quantity","rc.photo_note":"Prototype: in production you photograph the name or item and AI finds the product. Here pick it from the list.","rc.serial_note":"Prototype: in production the serial is read from a photo (OCR). Enter it manually here.","rc.photos_added":"Photos ready (not stored in the prototype)."
+});
+// --- v0.7: doklady, výdaj, inventúra ---
+Object.assign(DICT.sk,{
+ "nav.docs":"Doklady (príjem/výdaj)","nav.stocktake":"Inventúra",
+ "rc.doc":"Doklad / faktúra (nepovinné)","rc.new_product":"+ Založiť nový produkt","iv.issue":"Výdaj",
+ "iss.title":"Výdaj zo skladu","iss.qty":"Množstvo na výdaj","iss.reason":"Účel / dôvod výdaja","iss.doc":"Doklad / objednávka","iss.via":"Spôsob","iss.via_phys":"fyzicky","iss.via_ship":"zásielkou","iss.confirm":"Vydať zo skladu","iss.note":"Poznámka","iss.max":"na sklade: {n}",
+ "dc.title":"Doklady — príjemky a výdajky","dc.sub":"História: kto, kedy a čo prijal alebo vydal zo skladu","dc.receipts":"Príjemky","dc.issues":"Výdajky","dc.all":"Všetko","dc.date":"Dátum a čas","dc.type":"Typ","dc.product":"Produkt","dc.qty":"Množstvo","dc.where":"Sklad / pozícia","dc.user":"Používateľ","dc.doc":"Doklad","dc.via":"Spôsob","dc.purpose":"Účel","dc.type_in":"príjem","dc.type_out":"výdaj","dc.type_corr":"inventúra","dc.none":"Zatiaľ žiadne pohyby.","dc.doc_future":"Modul dokladov/faktúr sa doplní neskôr — zatiaľ sa zadáva ako text.",
+ "st.title":"Inventúra skladu","st.sub":"Cyklus na produkt: niektoré mesačne, niektoré ročne","st.cycle":"Cyklus","st.monthly":"mesačne","st.yearly":"ročne","st.none":"neinventarizovať","st.last":"Posledná inventúra","st.never":"nikdy","st.status":"Stav","st.ok":"v poriadku","st.overdue":"po termíne","st.count":"Spočítať","st.only_due":"Len na rade / po termíne","st.count_title":"Inventúra produktu","st.counted":"Napočítané","st.save":"Uložiť inventúru","st.done":"Inventúra uložená. Korekcií: {n}.","st.product":"Produkt","st.total":"Evidované"
+});
+Object.assign(DICT.cs,{
+ "nav.docs":"Doklady (příjem/výdej)","nav.stocktake":"Inventura",
+ "rc.doc":"Doklad / faktura (nepovinné)","rc.new_product":"+ Založit nový produkt","iv.issue":"Výdej",
+ "iss.title":"Výdej ze skladu","iss.qty":"Množství k výdeji","iss.reason":"Účel / důvod výdeje","iss.doc":"Doklad / objednávka","iss.via":"Způsob","iss.via_phys":"fyzicky","iss.via_ship":"zásilkou","iss.confirm":"Vydat ze skladu","iss.note":"Poznámka","iss.max":"na skladě: {n}",
+ "dc.title":"Doklady — příjemky a výdejky","dc.sub":"Historie: kdo, kdy a co přijal nebo vydal ze skladu","dc.receipts":"Příjemky","dc.issues":"Výdejky","dc.all":"Vše","dc.date":"Datum a čas","dc.type":"Typ","dc.product":"Produkt","dc.qty":"Množství","dc.where":"Sklad / pozice","dc.user":"Uživatel","dc.doc":"Doklad","dc.via":"Způsob","dc.purpose":"Účel","dc.type_in":"příjem","dc.type_out":"výdej","dc.type_corr":"inventura","dc.none":"Zatím žádné pohyby.","dc.doc_future":"Modul dokladů/faktur se doplní později — zatím se zadává jako text.",
+ "st.title":"Inventura skladu","st.sub":"Cyklus na produkt: některé měsíčně, některé ročně","st.cycle":"Cyklus","st.monthly":"měsíčně","st.yearly":"ročně","st.none":"neinventarizovat","st.last":"Poslední inventura","st.never":"nikdy","st.status":"Stav","st.ok":"v pořádku","st.overdue":"po termínu","st.count":"Spočítat","st.only_due":"Jen na řadě / po termínu","st.count_title":"Inventura produktu","st.counted":"Napočítáno","st.save":"Uložit inventuru","st.done":"Inventura uložena. Korekcí: {n}.","st.product":"Produkt","st.total":"Evidováno"
+});
+Object.assign(DICT.en,{
+ "nav.docs":"Documents (in/out)","nav.stocktake":"Stocktake",
+ "rc.doc":"Document / invoice (optional)","rc.new_product":"+ Create new product","iv.issue":"Issue",
+ "iss.title":"Issue from warehouse","iss.qty":"Quantity to issue","iss.reason":"Purpose / reason","iss.doc":"Document / order","iss.via":"Method","iss.via_phys":"physical","iss.via_ship":"by shipment","iss.confirm":"Issue from stock","iss.note":"Note","iss.max":"in stock: {n}",
+ "dc.title":"Documents — receipts and issues","dc.sub":"History: who, when and what was received or issued","dc.receipts":"Receipts","dc.issues":"Issues","dc.all":"All","dc.date":"Date & time","dc.type":"Type","dc.product":"Product","dc.qty":"Quantity","dc.where":"Warehouse / position","dc.user":"User","dc.doc":"Document","dc.via":"Method","dc.purpose":"Purpose","dc.type_in":"receipt","dc.type_out":"issue","dc.type_corr":"stocktake","dc.none":"No movements yet.","dc.doc_future":"The documents/invoice module will be added later — entered as text for now.",
+ "st.title":"Warehouse stocktake","st.sub":"Cycle per product: some monthly, some yearly","st.cycle":"Cycle","st.monthly":"monthly","st.yearly":"yearly","st.none":"no stocktake","st.last":"Last stocktake","st.never":"never","st.status":"Status","st.ok":"ok","st.overdue":"overdue","st.count":"Count","st.only_due":"Only due / overdue","st.count_title":"Product stocktake","st.counted":"Counted","st.save":"Save stocktake","st.done":"Stocktake saved. Corrections: {n}.","st.product":"Product","st.total":"Recorded"
+});
+// --- v0.8: inventár firemného majetku ---
+Object.assign(DICT.sk,{
+ "nav.assets":"Inventár (majetok)",
+ "as.title":"Inventár — firemný majetok","as.sub":"Tovar používaný na firme (nie na predaj)","as.new":"+ Nový majetok","as.search":"Hľadať názov / osobu / SN…",
+ "as.item":"Položka z produktov","as.item_none":"— vlastný názov —","as.name":"Názov (ak nie je produkt)","as.assigned":"Pridelené (osoba / miesto)","as.location":"Umiestnenie","as.serial":"Sériové č.","as.acquired":"Dátum obstarania","as.state":"Stav","as.note":"Poznámka",
+ "as.col_item":"Majetok","as.col_assigned":"Pridelené","as.col_serial":"Sériové č.","as.col_acquired":"Obstaranie","as.col_state":"Stav","as.state_new":"nové","as.state_used":"používané","as.state_broken":"nefunkčné"
+});
+Object.assign(DICT.cs,{
+ "nav.assets":"Inventář (majetek)",
+ "as.title":"Inventář — firemní majetek","as.sub":"Zboží používané ve firmě (ne na prodej)","as.new":"+ Nový majetek","as.search":"Hledat název / osobu / SN…",
+ "as.item":"Položka z produktů","as.item_none":"— vlastní název —","as.name":"Název (pokud není produkt)","as.assigned":"Přiděleno (osoba / místo)","as.location":"Umístění","as.serial":"Sériové č.","as.acquired":"Datum pořízení","as.state":"Stav","as.note":"Poznámka",
+ "as.col_item":"Majetek","as.col_assigned":"Přiděleno","as.col_serial":"Sériové č.","as.col_acquired":"Pořízení","as.col_state":"Stav","as.state_new":"nové","as.state_used":"používané","as.state_broken":"nefunkční"
+});
+Object.assign(DICT.en,{
+ "nav.assets":"Assets (company)",
+ "as.title":"Assets — company equipment","as.sub":"Items used by the company (not for sale)","as.new":"+ New asset","as.search":"Search name / person / SN…",
+ "as.item":"Item from products","as.item_none":"— custom name —","as.name":"Name (if not a product)","as.assigned":"Assigned to (person / place)","as.location":"Location","as.serial":"Serial","as.acquired":"Acquired date","as.state":"State","as.note":"Note",
+ "as.col_item":"Asset","as.col_assigned":"Assigned","as.col_serial":"Serial","as.col_acquired":"Acquired","as.col_state":"State","as.state_new":"new","as.state_used":"in use","as.state_broken":"broken"
+});
+// --- v0.9 ---
+Object.assign(DICT.sk,{
+ "pf.weight":"Hmotnosť (g)","det.weight":"Hmotnosť","iv.filter_by_tag":"Filtrovať podľa #{x}?",
+ "dc.search":"Hľadať produkt / doklad / účel…","dc.receive":"+ Príjem","dc.issue":"− Výdaj",
+ "if.title":"Výdaj — nájdi položku","if.search":"Naskenuj QR alebo napíš SN / pozíciu / názov…","if.scan":"📷 Skenovať QR","if.none":"Nič sa nenašlo.","if.pick":"Vydať",
+ "rc.state":"Stav tovaru","rc.state_note":"Popis stavu (napr. poškodená koncovka)",
+ "sh.filter_dir":"Všetky smery","sh.filter_paid":"Platba (všetko)","sh.dir_drop":"dropship (dodávateľ→zákazník)",
+ "sh.sec_general":"Základné údaje","sh.sec_pay":"Platba","sh.sec_customs":"Colné (mimo EU)","sh.sec_content":"Obsah zásielky",
+ "sh.sender":"Odosielateľ / dodávateľ (kto, firma)","sh.contents":"Obsah (dopĺňaný priebežne)","sh.our_order":"Naše číslo objednávky",
+ "sh.cust_pay":"Platba zákazníka","sh.pay_none":"—","sh.pay_proforma":"proforma (vopred)","sh.pay_deposit":"záloha + dobierka","sh.pay_cod":"dobierka",
+ "sh.ship_cost":"Cena prepravy (platíme my)","sh.inbound_paid":"Zaplatené?","sh.paid_where":"Faktúra / kde zaplatené",
+ "sh.non_eu":"Mimo EU — colné JDS","sh.jds":"JDS číslo","sh.awb":"AWB číslo","sh.customs_value":"Colná hodnota tovaru","sh.duty":"Clo","sh.proc_fee":"Poplatok prepravcu (spracovanie)",
+ "sh.assign_qr":"✓ Prijať na sklad (prideliť QR)","sh.status_auto":"Stav sa zisťuje automaticky z API prepravcu (prototyp: zadaj ručne).",
+ "sh.col_dir":"Smer","sh.col_pay":"Platba","sh.received_ok":"Prijaté na sklad — vytvorená položka s QR."
+});
+Object.assign(DICT.cs,{
+ "pf.weight":"Hmotnost (g)","det.weight":"Hmotnost","iv.filter_by_tag":"Filtrovat podle #{x}?",
+ "dc.search":"Hledat produkt / doklad / účel…","dc.receive":"+ Příjem","dc.issue":"− Výdej",
+ "if.title":"Výdej — najdi položku","if.search":"Naskenuj QR nebo napiš SN / pozici / název…","if.scan":"📷 Skenovat QR","if.none":"Nic nenalezeno.","if.pick":"Vydat",
+ "rc.state":"Stav zboží","rc.state_note":"Popis stavu (např. poškozená koncovka)",
+ "sh.filter_dir":"Všechny směry","sh.filter_paid":"Platba (vše)","sh.dir_drop":"dropship (dodavatel→zákazník)",
+ "sh.sec_general":"Základní údaje","sh.sec_pay":"Platba","sh.sec_customs":"Celní (mimo EU)","sh.sec_content":"Obsah zásilky",
+ "sh.sender":"Odesílatel / dodavatel (kdo, firma)","sh.contents":"Obsah (doplňovaný průběžně)","sh.our_order":"Naše číslo objednávky",
+ "sh.cust_pay":"Platba zákazníka","sh.pay_none":"—","sh.pay_proforma":"proforma (předem)","sh.pay_deposit":"záloha + dobírka","sh.pay_cod":"dobírka",
+ "sh.ship_cost":"Cena přepravy (platíme my)","sh.inbound_paid":"Zaplaceno?","sh.paid_where":"Faktura / kde zaplaceno",
+ "sh.non_eu":"Mimo EU — celní JDS","sh.jds":"JDS číslo","sh.awb":"AWB číslo","sh.customs_value":"Celní hodnota zboží","sh.duty":"Clo","sh.proc_fee":"Poplatek přepravce (zpracování)",
+ "sh.assign_qr":"✓ Přijmout na sklad (přidělit QR)","sh.status_auto":"Stav se zjišťuje automaticky z API dopravce (prototyp: zadej ručně).",
+ "sh.col_dir":"Směr","sh.col_pay":"Platba","sh.received_ok":"Přijato na sklad — vytvořena položka s QR."
+});
+Object.assign(DICT.en,{
+ "pf.weight":"Weight (g)","det.weight":"Weight","iv.filter_by_tag":"Filter by #{x}?",
+ "dc.search":"Search product / document / purpose…","dc.receive":"+ Receipt","dc.issue":"− Issue",
+ "if.title":"Issue — find item","if.search":"Scan QR or type SN / position / name…","if.scan":"📷 Scan QR","if.none":"Nothing found.","if.pick":"Issue",
+ "rc.state":"Item condition","rc.state_note":"Condition note (e.g. damaged connector)",
+ "sh.filter_dir":"All directions","sh.filter_paid":"Payment (all)","sh.dir_drop":"dropship (supplier→customer)",
+ "sh.sec_general":"General","sh.sec_pay":"Payment","sh.sec_customs":"Customs (non-EU)","sh.sec_content":"Shipment contents",
+ "sh.sender":"Sender / supplier (who, company)","sh.contents":"Contents (filled progressively)","sh.our_order":"Our order number",
+ "sh.cust_pay":"Customer payment","sh.pay_none":"—","sh.pay_proforma":"proforma (prepaid)","sh.pay_deposit":"deposit + COD","sh.pay_cod":"cash on delivery",
+ "sh.ship_cost":"Shipping cost (we pay)","sh.inbound_paid":"Paid?","sh.paid_where":"Invoice / where paid",
+ "sh.non_eu":"Non-EU — customs JDS","sh.jds":"JDS number","sh.awb":"AWB number","sh.customs_value":"Customs value","sh.duty":"Duty","sh.proc_fee":"Carrier processing fee",
+ "sh.assign_qr":"✓ Receive to warehouse (assign QR)","sh.status_auto":"Status is fetched automatically from the carrier API (prototype: enter manually).",
+ "sh.col_dir":"Direction","sh.col_pay":"Payment","sh.received_ok":"Received — stock item created with QR."
+});
+// --- v1.0 ---
+Object.assign(DICT.sk,{
+ "iv.arriving":"doručuje sa","iv.eta":"predp. doručenie","p.assembly_badge":"zostava",
+ "dm.title":"Detail dokladu","dm.type":"Typ","dm.product":"Produkt","dm.qty":"Množstvo","dm.serial":"Sériové číslo","dm.qr":"QR kód","dm.wh":"Sklad / pozícia","dm.user":"Používateľ","dm.date":"Dátum a čas","dm.doc":"Doklad","dm.purpose":"Účel","dm.via":"Spôsob","dm.note":"Poznámka","dm.open_hint":"Klikni na riadok pre detail",
+ "sh.to_us":"↙ k nám","sh.from_us":"↗ od nás","sh.drop":"⤳ dropship","sh.open":"sledovať","sh.closed":"uzavreté","sh.filter_open":"Len na sledovanie","sh.st_cat":"Riešenie",
+ "c.export":"⬇ Export (Excel/CSV)","sh.quick":"⚡ Rýchle: tracking","sh.quick_title":"Nová zásielka podľa tracking number","sh.quick_tn":"Tracking number","sh.quick_photo":"📷 Odfotiť tracking","sh.quick_fetch":"🔎 Dohľadať údaje","sh.quick_note":"Prototyp: podľa tracking number appka automaticky dohľadá prepravcu a stav (tu z prefixu). V ostrej verzii cez API prepravcov.","sh.quick_found":"Dohľadané: prepravca {c}, stav {s}. Doplň zvyšok."
+});
+Object.assign(DICT.cs,{
+ "iv.arriving":"doručuje se","iv.eta":"předp. doručení","p.assembly_badge":"sestava",
+ "dm.title":"Detail dokladu","dm.type":"Typ","dm.product":"Produkt","dm.qty":"Množství","dm.serial":"Sériové číslo","dm.qr":"QR kód","dm.wh":"Sklad / pozice","dm.user":"Uživatel","dm.date":"Datum a čas","dm.doc":"Doklad","dm.purpose":"Účel","dm.via":"Způsob","dm.note":"Poznámka","dm.open_hint":"Klikni na řádek pro detail",
+ "sh.to_us":"↙ k nám","sh.from_us":"↗ od nás","sh.drop":"⤳ dropship","sh.open":"sledovat","sh.closed":"uzavřené","sh.filter_open":"Jen na sledování","sh.st_cat":"Řešení",
+ "c.export":"⬇ Export (Excel/CSV)","sh.quick":"⚡ Rychle: tracking","sh.quick_title":"Nová zásilka dle tracking number","sh.quick_tn":"Tracking number","sh.quick_photo":"📷 Vyfotit tracking","sh.quick_fetch":"🔎 Dohledat údaje","sh.quick_note":"Prototyp: dle tracking number appka automaticky dohledá dopravce a stav (zde z prefixu). V ostré verzi přes API dopravců.","sh.quick_found":"Dohledáno: dopravce {c}, stav {s}. Doplň zbytek."
+});
+Object.assign(DICT.en,{
+ "iv.arriving":"arriving","iv.eta":"est. delivery","p.assembly_badge":"assembly",
+ "dm.title":"Document detail","dm.type":"Type","dm.product":"Product","dm.qty":"Quantity","dm.serial":"Serial number","dm.qr":"QR code","dm.wh":"Warehouse / position","dm.user":"User","dm.date":"Date & time","dm.doc":"Document","dm.purpose":"Purpose","dm.via":"Method","dm.note":"Note","dm.open_hint":"Click a row for detail",
+ "sh.to_us":"↙ inbound","sh.from_us":"↗ outbound","sh.drop":"⤳ dropship","sh.open":"track","sh.closed":"closed","sh.filter_open":"Only to track","sh.st_cat":"Handling",
+ "c.export":"⬇ Export (Excel/CSV)","sh.quick":"⚡ Quick: tracking","sh.quick_title":"New shipment by tracking number","sh.quick_tn":"Tracking number","sh.quick_photo":"📷 Photo tracking","sh.quick_fetch":"🔎 Fetch data","sh.quick_note":"Prototype: from the tracking number the app auto-detects carrier and status (here from prefix). In production via carrier APIs.","sh.quick_found":"Found: carrier {c}, status {s}. Fill in the rest."
+});
+Object.assign(DICT.sk,{"sh.customs_toggle":"Colné konanie (aj mimo EU, napr. ČN→USA)","sh.incoterm":"Dodacia podmienka (Incoterm)","sh.incoterm_legend":"ℹ Vysvetlivky Incoterms","sh.incoterm_title":"Incoterms — dodacie podmienky"});
+Object.assign(DICT.cs,{"sh.customs_toggle":"Celní řízení (i mimo EU, např. ČN→USA)","sh.incoterm":"Dodací podmínka (Incoterm)","sh.incoterm_legend":"ℹ Vysvětlivky Incoterms","sh.incoterm_title":"Incoterms — dodací podmínky"});
+Object.assign(DICT.en,{"sh.customs_toggle":"Customs clearance (also non-EU, e.g. CN→USA)","sh.incoterm":"Delivery term (Incoterm)","sh.incoterm_legend":"ℹ Incoterms legend","sh.incoterm_title":"Incoterms — delivery terms"});
+// --- v1.1 ---
+Object.assign(DICT.sk,{
+ "nav.qr":"Tlač QR kódov","sh.items":"Obsah — položky (produkty)","sh.add_item":"+ Pridať položku","sh.item_product":"Produkt","sh.item_qty":"Ks","sh.receive_items_ok":"Prijaté na sklad. Založené položky s QR: {n}.","sh.items_hint":"Zadaj obsah po položkách (produkt + počet). Pri prebratí sa automaticky založia do skladu s QR.",
+ "qr.title":"Tlač QR kódov","qr.sub":"List QR na bežnú tlačiareň · 2×2 alebo 3×3 cm, viac vedľa seba","qr.mode":"Zdroj kódu","qr.mode_product":"Z produktu","qr.mode_custom":"Vlastný text / číslo","qr.mode_web":"Odkaz na web (dohľadanie)","qr.product":"Produkt","qr.text":"Text / číslo do QR","qr.company":"Značka firmy pod QR","qr.company_none":"— bez značky —","qr.size":"Veľkosť QR","qr.cols":"Ks vedľa seba","qr.count":"Počet celkovo","qr.generate":"Vygenerovať list","qr.print":"🖨 Tlačiť","qr.web_hint":"QR bude obsahovať odkaz na váš web — zákazník vás podľa neho dohľadá.","qr.online_note":"Prototyp: QR generuje online služba. V ostrej verzii lokálny generátor (funguje aj offline).","qr.label_under":"Popis pod QR"
+});
+Object.assign(DICT.cs,{
+ "nav.qr":"Tisk QR kódů","sh.items":"Obsah — položky (produkty)","sh.add_item":"+ Přidat položku","sh.item_product":"Produkt","sh.item_qty":"Ks","sh.receive_items_ok":"Přijato na sklad. Založené položky s QR: {n}.","sh.items_hint":"Zadej obsah po položkách (produkt + počet). Při převzetí se automaticky založí na sklad s QR.",
+ "qr.title":"Tisk QR kódů","qr.sub":"List QR na běžnou tiskárnu · 2×2 nebo 3×3 cm, více vedle sebe","qr.mode":"Zdroj kódu","qr.mode_product":"Z produktu","qr.mode_custom":"Vlastní text / číslo","qr.mode_web":"Odkaz na web (dohledání)","qr.product":"Produkt","qr.text":"Text / číslo do QR","qr.company":"Značka firmy pod QR","qr.company_none":"— bez značky —","qr.size":"Velikost QR","qr.cols":"Ks vedle sebe","qr.count":"Počet celkem","qr.generate":"Vygenerovat list","qr.print":"🖨 Tisk","qr.web_hint":"QR bude obsahovat odkaz na váš web — zákazník vás podle něj dohledá.","qr.online_note":"Prototyp: QR generuje online služba. V ostré verzi lokální generátor (funguje i offline).","qr.label_under":"Popis pod QR"
+});
+Object.assign(DICT.en,{
+ "nav.qr":"Print QR codes","sh.items":"Contents — items (products)","sh.add_item":"+ Add item","sh.item_product":"Product","sh.item_qty":"Qty","sh.receive_items_ok":"Received. Stock items created with QR: {n}.","sh.items_hint":"Enter contents as items (product + qty). On receipt they are created in stock with QR automatically.",
+ "qr.title":"Print QR codes","qr.sub":"QR sheet for a normal printer · 2×2 or 3×3 cm, several side by side","qr.mode":"Code source","qr.mode_product":"From product","qr.mode_custom":"Custom text / number","qr.mode_web":"Website link (findable)","qr.product":"Product","qr.text":"Text / number in QR","qr.company":"Company brand under QR","qr.company_none":"— no brand —","qr.size":"QR size","qr.cols":"Per row","qr.count":"Total count","qr.generate":"Generate sheet","qr.print":"🖨 Print","qr.web_hint":"The QR will contain a link to your website — customers can find you.","qr.online_note":"Prototype: QR is generated by an online service. Production uses a local generator (works offline too).","qr.label_under":"Label under QR"
+});
+Object.assign(DICT.sk,{"qr.seq":"Jedinečné (sekvenčné) kódy — predtlačený list","qr.seq_prefix":"Predpona kódu","qr.codes":"Počet rôznych kódov","qr.dupes":"Rovnakých na kód","qr.cut":"Rezacie čiary / krížiky"});
+Object.assign(DICT.cs,{"qr.seq":"Jedinečné (sekvenční) kódy — předtištěný list","qr.seq_prefix":"Předpona kódu","qr.codes":"Počet různých kódů","qr.dupes":"Stejných na kód","qr.cut":"Řezací čáry / křížky"});
+Object.assign(DICT.en,{"qr.seq":"Unique (sequential) codes — pre-printed sheet","qr.seq_prefix":"Code prefix","qr.codes":"Number of distinct codes","qr.dupes":"Identical per code","qr.cut":"Cut lines / crop marks"});
+
+// ================= DATA =================
+const LS="skladapp_v05";
+const CURRENCIES=[
+  {code:"CZK",name:"Česká koruna",type:"fiat",decimals:2,primary:true,active:true},
+  {code:"EUR",name:"Euro",type:"fiat",decimals:2,active:true},
+  {code:"USD",name:"US dollar",type:"fiat",decimals:2,active:true},
+  {code:"BTC",name:"Bitcoin",type:"crypto",decimals:8,active:true},{code:"LTC",name:"Litecoin",type:"crypto",decimals:8,active:true},
+  {code:"KAS",name:"Kaspa",type:"crypto",decimals:8,active:true},{code:"USDT",name:"Tether",type:"crypto",decimals:6,active:true},
+  {code:"USDC",name:"USD Coin",type:"crypto",decimals:6,active:true},{code:"DOGE",name:"Dogecoin",type:"crypto",decimals:8,active:true},
+];
+const PERMS=[
+  {g:"Sklad",code:"product.view",l:{sk:"Zobraziť produkty",cs:"Zobrazit produkty",en:"View products"}},
+  {g:"Sklad",code:"product.edit",l:{sk:"Pridať / upraviť produkt",cs:"Přidat / upravit produkt",en:"Add / edit product"}},
+  {g:"Sklad",code:"product.delete",l:{sk:"Zmazať produkt",cs:"Smazat produkt",en:"Delete product"}},
+  {g:"Sklad",code:"product.merge",l:{sk:"Zlučovať duplicity",cs:"Slučovat duplicity",en:"Merge duplicates"}},
+  {g:"Sklad",code:"price.edit",l:{sk:"Upraviť cenu",cs:"Upravit cenu",en:"Edit price"}},
+  {g:"Sklad",code:"inventory.view",l:{sk:"Zobraziť zásoby",cs:"Zobrazit zásoby",en:"View inventory"}},
+  {g:"Sklad",code:"inventory.move",l:{sk:"Presun / transfer",cs:"Přesun / transfer",en:"Move / transfer"}},
+  {g:"Sklad",code:"qr.scan",l:{sk:"Skenovať QR / SN",cs:"Skenovat QR / SN",en:"Scan QR / SN"}},
+  {g:"Sklad",code:"premium.view",l:{sk:"Vidieť prémiové produkty",cs:"Vidět prémiové produkty",en:"See premium products"}},
+  {g:"Zásielky",code:"shipment.view",l:{sk:"Zobraziť zásielky",cs:"Zobrazit zásilky",en:"View shipments"}},
+  {g:"Zásielky",code:"shipment.edit",l:{sk:"Pridať / upraviť zásielku",cs:"Přidat / upravit zásilku",en:"Add / edit shipment"}},
+  {g:"Zásielky",code:"shipment.payment",l:{sk:"Platba / faktúra",cs:"Platba / faktura",en:"Payment / invoice"}},
+  {g:"Systém",code:"user.manage",l:{sk:"Správa používateľov",cs:"Správa uživatelů",en:"Manage users"}},
+  {g:"Systém",code:"role.manage",l:{sk:"Správa rolí",cs:"Správa rolí",en:"Manage roles"}},
+  {g:"Systém",code:"api.query",l:{sk:"API dotaz (external)",cs:"API dotaz (external)",en:"API query (external)"}},
+];
+const PGRP={"Sklad":{sk:"Sklad",cs:"Sklad",en:"Warehouse"},"Zásielky":{sk:"Zásielky",cs:"Zásilky",en:"Shipping"},"Systém":{sk:"Systém",cs:"Systém",en:"System"}};
+const DEFAULT_MATRIX={
+  admin:Object.fromEntries(PERMS.map(p=>[p.code,true])),
+  user:Object.fromEntries(PERMS.map(p=>[p.code,["product.view","product.edit","price.edit","inventory.view","inventory.move","qr.scan","shipment.view","shipment.edit","shipment.payment"].includes(p.code)])),
+  visitor:Object.fromEntries(PERMS.map(p=>[p.code,["product.view","inventory.view","shipment.view"].includes(p.code)])),
+  external:Object.fromEntries(PERMS.map(p=>[p.code,["api.query"].includes(p.code)])),
+};
+function nm(sk,cs,en){return {sk,cs,en:en||sk};}
+function seed(){
+  return {
+    currencies:JSON.parse(JSON.stringify(CURRENCIES)),
+    matrix:JSON.parse(JSON.stringify(DEFAULT_MATRIX)),
+    brands:["Generic","Kingston","Samsung","Iceriver","Bitmain"],
+    categories:[
+      {id:1,parent:null,nm:nm("Spotrebný materiál","Spotřební materiál","Consumables")},
+      {id:11,parent:1,nm:nm("Káble","Kabely","Cables")},{id:12,parent:1,nm:nm("Konektory","Konektory","Connectors")},
+      {id:2,parent:null,nm:nm("Komponenty","Komponenty","Components")},
+      {id:21,parent:2,nm:nm("Pamäte","Paměti","Memory")},{id:22,parent:2,nm:nm("Disky","Disky","Drives")},{id:23,parent:2,nm:nm("Základné dosky","Základní desky","Motherboards")},
+      {id:3,parent:null,nm:nm("ASIC minery","ASIC minery","ASIC miners")},
+      {id:31,parent:3,nm:nm("Kaspa","Kaspa","Kaspa")},{id:32,parent:3,nm:nm("Bitcoin","Bitcoin","Bitcoin")},
+    ],
+    // parametre viazané na kategóriu (podkategórie dedia od rodiča)
+    attrDefs:[
+      {cat:11,key:"length",label:nm("Dĺžka","Délka","Length"),type:"number",unit:"m",filter:true},
+      {cat:11,key:"conn_a",label:nm("Koncovka A","Koncovka A","Connector A"),type:"enum",options:["C13","C14","Schuko","USB-A","USB-C"],filter:true},
+      {cat:11,key:"conn_b",label:nm("Koncovka B","Koncovka B","Connector B"),type:"enum",options:["C13","C14","Schuko","USB-A","USB-C"],filter:true},
+      {cat:11,key:"color",label:nm("Farba","Barva","Color"),type:"text"},
+      {cat:21,key:"capacity",label:nm("Kapacita","Kapacita","Capacity"),type:"number",unit:"GB",filter:true},
+      {cat:21,key:"speed",label:nm("Frekvencia","Frekvence","Speed"),type:"number",unit:"MHz",filter:true},
+      {cat:21,key:"mem_type",label:nm("Typ","Typ","Type"),type:"enum",options:["DDR4","DDR5"],filter:true},
+      {cat:22,key:"capacity",label:nm("Kapacita","Kapacita","Capacity"),type:"number",unit:"GB",filter:true},
+      {cat:22,key:"interface",label:nm("Rozhranie","Rozhraní","Interface"),type:"enum",options:["NVMe","SATA"],filter:true},
+      {cat:22,key:"form",label:nm("Form-factor","Form-factor","Form factor"),type:"enum",options:["M.2","2.5\""]},
+      {cat:23,key:"socket",label:nm("Socket","Socket","Socket"),type:"enum",options:["AM5","AM4","LGA1700"],filter:true},
+      {cat:23,key:"ram_slots",label:nm("Sloty RAM","Sloty RAM","RAM slots"),type:"number"},
+      {cat:3,key:"hashrate",label:nm("Výkon","Výkon","Hashrate"),type:"number",unit:"Th/s",filter:true},
+      {cat:3,key:"algorithm",label:nm("Algoritmus","Algoritmus","Algorithm"),type:"enum",options:["kHeavyHash (Kaspa)","SHA-256 (BTC)","Scrypt (LTC)"],filter:true},
+      {cat:3,key:"power",label:nm("Príkon","Příkon","Power"),type:"number",unit:"W",filter:true},
+      {cat:3,key:"noise",label:nm("Hlučnosť","Hlučnost","Noise"),type:"number",unit:"dB"},
+      {cat:3,key:"psu",label:nm("Napájanie","Napájení","PSU"),type:"enum",options:["interné","externé"]},
+      {cat:3,key:"dimensions",label:nm("Rozmery","Rozměry","Dimensions"),type:"text"},
+    ],
+    tags:[
+      {name:"napájací",cats:[11]},{name:"C13",cats:[11]},{name:"DDR4",cats:[21]},{name:"NVMe",cats:[22]},
+      {name:"1TB",cats:[22]},{name:"ASIC",cats:[3]},{name:"Kaspa",cats:[3,31]},{name:"mining",cats:[3]},{name:"nové",cats:[]}
+    ],
+    warehouses:[
+      {id:1,name:"Rostovská 260/2b, Praha",color:"#3b6fd4",locations:[
+        {code:"1",desc:"Rada 1"},{code:"2",desc:"Rada 2"},{code:"3",desc:"Rada 3"},{code:"4",desc:"Rada 4"},{code:"5",desc:"Rada 5"},{code:"6",desc:"Rada 6"},
+        {code:"Garáž",desc:"Garáž pri vjazde"},{code:"Kancl",desc:"Kancelária na poschodí — u výťahu"},{code:"Reg. horný",desc:"Regál horný"},{code:"Reg. spodný",desc:"Regál spodný"}]},
+      {id:2,name:"Sklad Poděbrady",color:"#2e9e5b",locations:[{code:"A",desc:"Regál A"},{code:"B",desc:"Regál B"},{code:"Sklad",desc:"Hlavný priestor"}]},
+      {id:3,name:"Sklad Michal střecha",color:"#7a4fc0",locations:[{code:"M1",desc:"Miestnosť 1"},{code:"Polica",desc:"Polica pri vchode"}]},
+    ],
+    users:[
+      {id:1,name:"Administrátor",email:"admin@firma.cz",role:"admin",scope:"oboje",active:true},
+      {id:2,name:"Jana Skladová",email:"jana@firma.cz",role:"user",scope:"sklad",active:true},
+      {id:3,name:"Peter Zásielka",email:"peter@firma.cz",role:"user",scope:"zasielky",active:true},
+      {id:4,name:"Partner API",email:"api@partner.com",role:"external",scope:"oboje",active:true},
+    ],
+    products:[
+      {id:1,sku:"CBL-C13-23",name:"Kábel · napájací C13 · 2.3 m",desc:"napájací kábel C13",longDesc:"",brand:"Generic",model:"",categoryId:11,type:"simple",tags:["napájací","C13"],aliases:[],attrs:{length:2.3,conn_a:"C13",conn_b:"Schuko",color:"čierna"},source:"manual",price:120,currency:"CZK",premium:false,image:"https://images.unsplash.com/photo-1601737487795-dab272f52420?w=200",priceBy:"Jana Skladová",priceAt:"2026-07-10",priceSrc:"manual"},
+      {id:2,sku:"",name:"napajeci kabel 230cm C13",desc:"kabel pc koncovka",longDesc:"",brand:"Generic",model:"",categoryId:11,type:"simple",tags:[],aliases:[],attrs:{length:2.3,conn_a:"C13"},source:"manual",price:118,currency:"CZK",premium:false,image:"",priceBy:"Peter Zásielka",priceAt:"2026-07-11",priceSrc:"manual"},
+      {id:3,sku:"RAM-16",name:"Pamäť · Kingston Fury · 16 GB 3200 MHz",desc:"RAM DDR4",longDesc:"",brand:"Kingston",model:"Fury",categoryId:21,type:"simple",tags:["DDR4"],aliases:[],attrs:{capacity:16,speed:3200,mem_type:"DDR4"},source:"manual",price:890,currency:"CZK",premium:false,image:"https://images.unsplash.com/photo-1541029071515-84cc54f84dc5?w=200",priceBy:"internet",priceAt:"2026-07-14",priceSrc:"internet"},
+      {id:4,sku:"SSD-1T",name:"Disk · Samsung 980 · 1 TB NVMe",desc:"SSD M.2",longDesc:"",brand:"Samsung",model:"980",categoryId:22,type:"simple",tags:["NVMe","1TB"],aliases:[],attrs:{capacity:1000,interface:"NVMe",form:"M.2"},source:"manual",price:1790,currency:"CZK",premium:false,image:"",priceBy:"Jana Skladová",priceAt:"2026-07-12",priceSrc:"manual"},
+      {id:5,sku:"ASIC-KAS-1",name:"ASIC · Iceriver KS3 · 8.3 Th/s",desc:"ASIC miner Kaspa",longDesc:"Iceriver KS3, algoritmus kHeavyHash, príkon 3200 W, hlučnosť ~75 dB, interné napájanie. Vhodný na ťažbu Kaspa.",brand:"Iceriver",model:"KS3",categoryId:31,type:"simple",tags:["ASIC","Kaspa","mining"],aliases:[],attrs:{hashrate:8.3,algorithm:"kHeavyHash (Kaspa)",power:3200,noise:75,psu:"interné",dimensions:"370×195×290 mm",weight:14700},weight:14700,source:"manual",price:4200,currency:"USD",premium:true,image:"",priceBy:"internet",priceAt:"2026-07-15",priceSrc:"internet"},
+      {id:6,sku:"PC-MINE-1",name:"Zostava · mining rig",desc:"základná zostava",longDesc:"Zostava pre domáci mining: 2× pamäť DDR4 16 GB, 1× SSD 1 TB NVMe. Rozšíriteľné o ďalšie komponenty.",brand:"",model:"",categoryId:23,type:"assembly",tags:["mining"],aliases:[],attrs:{socket:"AM5",ram_slots:4},source:"manual",price:0,currency:"CZK",premium:false,image:"",priceBy:"Jana Skladová",priceAt:"2026-07-13",priceSrc:"manual",components:[{productId:3,qty:2},{productId:4,qty:1}]},
+      {id:7,sku:"CON-RJ45",name:"Konektor · RJ45 (8P8C)",desc:"koncovka na sieťový kábel",longDesc:"",brand:"Generic",model:"",categoryId:12,type:"simple",tags:[],aliases:[],attrs:{},source:"manual",price:3,currency:"CZK",premium:false,image:"https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=200",priceBy:"Jana Skladová",priceAt:"2026-05-01",priceSrc:"manual"},
+    ],
+    // šarže zásob — jeden produkt môže mať viac šarží (rôzna cena, dátum, faktúra, miesto)
+    inventory:[
+      {id:1,productId:1,warehouseId:1,location:"1",status:"skladom",track:"bulk",quantity:40,serial:"",qr:"QR-BOX-01",state:"new",stateNote:"",note:"",buyPrice:95,buyCur:"CZK",buyDate:"2026-05-10",invoice:"FA-2026-050",counted:false},
+      {id:2,productId:1,warehouseId:2,location:"A",status:"skladom",track:"bulk",quantity:12,serial:"",qr:"",state:"used",stateNote:"mierne opotrebené",note:"",buyPrice:80,buyCur:"CZK",buyDate:"2025-11-02",invoice:"FA-2025-410",counted:false},
+      {id:3,productId:5,warehouseId:1,location:"4",status:"skladom",track:"unit",quantity:1,serial:"SN-ASIC-9001",qr:"QR-000104",state:"new",stateNote:"",note:"rezervované pre zákazníka",buyPrice:4200,buyCur:"USD",buyDate:"2026-06-01",invoice:"FA-2026-088",counted:false},
+      {id:4,productId:5,warehouseId:1,location:"4",status:"skladom",track:"unit",quantity:1,serial:"SN-ASIC-9002",qr:"QR-000106",state:"new",stateNote:"",note:"",buyPrice:3990,buyCur:"USD",buyDate:"2026-07-05",invoice:"FA-2026-101",counted:false},
+      {id:5,productId:5,warehouseId:3,location:"Polica",status:"na_ceste",track:"unit",quantity:1,serial:"SN-ASIC-9003",qr:"QR-000107",state:"used",stateNote:"repas, funkčný",note:"príchod ~2026-07-20",buyPrice:3500,buyCur:"USD",buyDate:"2026-03-15",invoice:"FA-2026-030",counted:false},
+      {id:6,productId:3,warehouseId:1,location:"Reg. horný",status:"skladom",track:"bulk",quantity:8,serial:"",qr:"QR-BOX-03",state:"new",stateNote:"",note:"",buyPrice:850,buyCur:"CZK",buyDate:"2026-06-20",invoice:"FA-2026-090",counted:false},
+      {id:7,productId:4,warehouseId:2,location:"B",status:"skladom",track:"bulk",quantity:5,serial:"",qr:"",state:"new",stateNote:"",note:"",buyPrice:1750,buyCur:"CZK",buyDate:"2026-06-22",invoice:"FA-2026-092",counted:false},
+      {id:8,productId:7,warehouseId:1,location:"2",status:"skladom",track:"bulk",quantity:200,serial:"",qr:"QR-BOX-02",state:"new",stateNote:"",note:"",buyPrice:3,buyCur:"CZK",buyDate:"2026-05-01",invoice:"FA-2026-045",counted:false},
+      {id:9,productId:4,warehouseId:1,location:"Reg. spodný",status:"skladom",track:"unit",quantity:1,serial:"SN-SSD-7788",qr:"QR-000108",state:"used",stateNote:"vrátený tovar",note:"",buyPrice:1600,buyCur:"CZK",buyDate:"2026-02-10",invoice:"FA-2026-012",counted:false},
+    ],
+    invFilters:{},
+    shipments:[
+      {id:1,tracking:"CZ123456789",carrier:"PPL",direction:"inbound",status:"V doprave",from:"Dodávateľ s.r.o., Praha",to:"Sklad 1 — Praha",exp:"2026-07-18",paid:true,payAmt:8400,payCur:"CZK",cryptoTx:"",invoice:"FA-2026-114"},
+      {id:2,tracking:"1Z999AA10123456784",carrier:"UPS",direction:"outbound",status:"Doručené",from:"Sklad 1 — Praha",to:"Zákazník, Wien",exp:"2026-07-12",paid:true,payAmt:0.0043,payCur:"BTC",cryptoTx:"a1b2c3…9f",invoice:"FA-2026-118"},
+      {id:3,tracking:"GLS55512300",carrier:"GLS",direction:"outbound",status:"Vrátené",from:"Sklad 2 — Brno",to:"Zákazník, Košice",exp:"2026-07-09",paid:false,payAmt:1200,payCur:"CZK",cryptoTx:"",invoice:""},
+    ],
+    seq:{product:8,inventory:10,shipment:4,user:5,warehouse:4,category:100},
+  };
+}
+let db=load();
+function load(){try{const r=localStorage.getItem(LS);if(r)return migrateV11(migrate(JSON.parse(r)));}catch(e){}const s=migrateV11(migrate(seed()));localStorage.setItem(LS,JSON.stringify(s));return s;}
+function save(){localStorage.setItem(LS,JSON.stringify(db));}
+// migrácia / backfill nových polí (v0.7)
+function migrate(x){
+  x.movements=x.movements||[];
+  x.seq=x.seq||{};x.seq.movement=x.seq.movement||1;x.seq.asset=x.seq.asset||1;
+  if(!x.assets){x.assets=[
+    {id:1,productId:5,name:"",assigned:"Jana Skladová",location:"Kancl",serial:"SN-ASIC-TEST",acquired:"2026-01-15",state:"used",note:"testovací kus — nie na predaj"},
+    {id:2,productId:null,name:"Notebook Dell Latitude 5540",assigned:"Peter Zásielka",location:"—",serial:"NB-4471",acquired:"2025-09-01",state:"used",note:""},
+    {id:3,productId:null,name:"Sada náradia (skrutkovače, kliešte)",assigned:"Sklad Rostovská",location:"Garáž",serial:"",acquired:"2026-03-10",state:"new",note:""},
+  ];x.seq.asset=4;}
+  (x.products||[]).forEach(p=>{if(!p.stockCycle)p.stockCycle=p.premium?"monthly":"yearly";if(!("lastCountAt"in p))p.lastCountAt=null;});
+  if(!x.movements.length){ // pár ukážkových pohybov do histórie
+    const today="2026-07-14";
+    x.movements=[
+      {id:1,type:"prijem",productId:5,qty:1,warehouseId:1,location:"4",userId:2,at:"2026-06-01T09:12:00",via:"fyzicky",doc:"FA-2026-088",purpose:""},
+      {id:2,type:"prijem",productId:1,qty:40,warehouseId:1,location:"1",userId:2,at:"2026-05-10T14:03:00",via:"fyzicky",doc:"FA-2026-050",purpose:""},
+      {id:3,type:"vydaj",productId:1,qty:5,warehouseId:1,location:"1",userId:3,at:today+"T11:40:00",via:"zasielkou",doc:"OBJ-2026-311",purpose:"predaj zákazníkovi"},
+    ];
+    x.seq.movement=4;
+  }
+  if(x.attrDefs&&!x.attrDefs.some(d=>d.cat===3&&d.key==="weight")){x.attrDefs.push({cat:3,key:"weight",label:{sk:"Hmotnosť",cs:"Hmotnost",en:"Weight"},type:"number",unit:"g",filter:false});}
+  if(!x._asicImported){
+    const A=[
+     ["Antminer","S21 XP+ Hyd","500 TH",5523,18900,9183.83],["Antminer","S19 XP Hyd","512 TH",10600,15700,4599],
+     ["Antminer","S21 XP Hyd","473 TH",5676,16700,6199],["Elphapex","DG Hydro 1","20 GH",6200,18300,4349],
+     ["Whatsminer","M63S++","478 TH",10000,32000,3969],["Whatsminer","M63S","390 TH",7215,30000,5361],
+     ["Whatsminer","M66S++","356 TH",5518,19000,2959],["Whatsminer","M63","334 TH",6646,30000,2299],
+     ["Whatsminer","M66S+","318 TH",5406,19000,2419],["Whatsminer","M66S","298 TH",5513,17000,1969],
+     ["Whatsminer","M66","280 TH",5572,17000,4510.08],["Antminer","S19 XP+ Hyd","279 TH",5301,17000,999],
+     ["Avalon","A1566I","249 TH",4500,17000,3465],["Avalon","A15XP-206T","206 TH",3667,15900,3532.2],
+     ["Antminer","S21e XP Hyd 3U","860 TH",11180,15700,10599],["Antminer","S19","95 TH",3250,16500,768],
+     ["Antminer","S19J PRO","96 TH",2832,16300,800],["Antminer","T21","233 TH",4630,19100,996],
+     ["Iceriver","AE1","300 MH",500,4000,979],["Antminer","S23 Hyd","580 TH",5510,14800,12990],
+     ["Bitaxe","Gamma 601 Lucky miner","1.2 TH",17,1000,62.99],["Auradine","Teraflux AH3880","600 TH",8700,15500,5699],
+     ["Jasminer","X44-P","23.4 GH",2550,1600,11199],["VolcMiner","D1","18 GH",4250,19250,6299],
+     ["Bitmain","Antminer S21e Hyd","288 TH",4896,17000,1498],["Bitmain","Antminer S23 Hyd 3U","1.16 PH",11020,18200,15499],
+     ["VolcMiner","D1 Hydro","33 GH",9300,25800,5799],["Iceriver","KS5L","12 TH",3400,15000,599],
+     ["Iceriver","KS5M","15 TH",3400,15500,699],["Iceriver","KS7 Lite","4.2 TH",500,4200,699],
+     ["Iceriver","AE2","720 MH",1300,4020,2599],["Iceriver","KS7","30 TH",3500,18200,1179],
+     ["Iceriver","AE3","600 MH",1000,17500,3501.22],["Iceriver","KS0 Ultra","400 GH",100,2500,112],
+     ["Antminer","S19k Pro","110 TH",2760,12800,297],["Antminer","S21+ Hyd","358 TH",5370,13800,2299],
+     ["Antminer","S21e XP Hyd","430 TH",5590,50000,5129],["Whatsminer","M60S++","234 TH",3422,13500,2316.76],
+     ["Antminer","KS7","45 TH",3465,17700,1916],["Antminer","D9","1.77 TH",2839,16100,1179],
+     ["Antminer","L9","16.5 GH",3465,16500,2601],["Antminer","L11","20 GH",3680,16500,7499],
+     ["Antminer","KS5","20 TH",3050,17000,609],["Antminer","KS5 PRO","21 TH",3150,17000,1199],
+     ["Sealminer","A2pro Hyd","500 TH",7475,26000,5919],["Goldshell","XT BOX","580 GH",400,4500,1749],
+     ["NerdMiner","NerdQaxe++","4.8 TH",60,1200,279],["Antminer","S23","318 TH",4129,25500,6899],
+     ["SealMiner","A3 Pro","660 TH",8250,21500,9590],["Antminer","S21 Pro","245 TH",3610,18800,2059],
+     ["Antminer","Z15 PRO","840 KH",2780,18800,6499],["Antminer","Z15","420 KH",1510,9000,3599],
+     ["VolcMiner","D3","20 GH",3580,17500,5999],["Whatsminer","M63S+","450 TH",7650,32500,5535],
+     ["Iceriver","AE0","60 MH",100,4400,309],["Antminer","S21XP","270 TH",3647,21500,3159],
+     ["Pinecone","INIBOX","850 MH",500,9000,1999],["Antminer","X9","1 MH",2472,21500,5449],
+     ["Whatsminer","M79S","1.35 PH",20000,52300,12279],["Antminer","X5","212 KH",1350,18800,3990],
+     ["Avalon","Avalon Q","90 TH",1674,10500,1329],["Jasminer","X16Q","1.95 GH",620,10000,1100.55],
+     ["Antminer","S21","200 TH",3500,17500,907.2],["Antminer","Z15 PRO","860 KH",2849,18800,7350],
+     ["Iceriver","XP0","150 GH",60,3600,799],["Avalon","Nano 3S","6 TH",140,1200,229],
+     ["PlebSourse","Hammer Miner Scrypt","105 MH",25,3500,239],["Magicminer","BG02","7 TH",150,null,349]
+    ];
+    let id=Math.max(0,...x.products.map(p=>p.id))+1;
+    A.forEach(r=>{const b=r[0],mo=r[1],h=r[2],pw=r[3],wt=r[4],pr=r[5];x.products.push({id:id++,sku:"",name:b+" "+mo,desc:h+" · "+pw+" W",longDesc:"",brand:b,model:mo,categoryId:3,type:"simple",tags:["ASIC","mining"],aliases:[],attrs:{hashrate:h,power:pw,weight:wt},weight:wt,source:"import",price:(pr==null?null:pr),currency:"USD",premium:false,image:"",priceBy:"import",priceAt:"2026-07-14",priceSrc:"internet",stockCycle:"yearly",lastCountAt:null});if(x.brands&&!x.brands.includes(b))x.brands.push(b);});
+    x.seq.product=id;x._asicImported=true;
+  }
+  if(!x._rndDocs){
+    const rnd=a=>a[Math.floor(Math.random()*a.length)];
+    const pids=x.products.map(p=>p.id),uids=x.users.map(u=>u.id);
+    for(let i=0;i<20;i++){const type=Math.random()<0.55?"prijem":"vydaj";const w=rnd(x.warehouses);const loc=(rnd(w.locations)||{}).code||"";
+      const d=new Date(Date.now()-Math.floor(Math.random()*90)*86400000);
+      x.movements.push({id:x.seq.movement++,type,productId:rnd(pids),qty:type==="prijem"?rnd([1,1,2,5,10]):rnd([1,1,2,3]),warehouseId:w.id,location:loc,userId:rnd(uids),at:d.toISOString(),via:(type==="vydaj"&&Math.random()<0.5)?"zasielkou":"fyzicky",doc:(type==="prijem"?"FA-2026-":"OBJ-2026-")+(100+Math.floor(Math.random()*800)),purpose:type==="vydaj"?rnd(["predaj","reklamácia","interné použitie"]):""});}
+    x._rndDocs=true;
+  }
+  // rozšírenie zásielok — doplnenie polí + ukážky
+  (x.shipments||[]).forEach(s=>{["sender","contents","ourOrder","custPay","shipCost","shipCostCur","paidWhere","nonEu","jds","awb","customsValue","duty","procFee","customs","incoterm"].forEach(k=>{if(!(k in s))s[k]=(k==="nonEu"||k==="customs"?false:(k==="shipCostCur"?"CZK":""));});if(s.nonEu&&!s.customs)s.customs=true;});
+  if(!x._shipV9){
+    x.shipments.push(
+     {id:x.seq.shipment++,tracking:"UPS-EXP-8841",carrier:"UPS",direction:"outbound",status:"Colné konanie",from:"Sklad 1 — Praha",to:"Zákazník, New York, USA",exp:"2026-07-25",paid:true,payAmt:8900,payCur:"USD",cryptoTx:"",invoice:"FA-2026-140",
+       sender:"",contents:"2× Antminer S21 XP Hyd",ourOrder:"NAŠA-2026-0087",custPay:"proforma",shipCost:180,shipCostCur:"USD",paidWhere:"",
+       nonEu:true,jds:"26CZ600000CABG4DR4",awb:"1Z999AA10123456999",customsValue:12000,duty:0,procFee:35},
+     {id:x.seq.shipment++,tracking:"DHL-DROP-5521",carrier:"DHL",direction:"dropship",status:"V doprave",from:"Dodávateľ Bitmain, HK",to:"Zákazník, Bratislava",exp:"2026-07-22",paid:false,payAmt:0,payCur:"EUR",cryptoTx:"",invoice:"",
+       sender:"Bitmain (HK)",contents:"Antminer S21 Pro (dropship)",ourOrder:"NAŠA-2026-0090",custPay:"cod",shipCost:0,shipCostCur:"EUR",paidWhere:"",
+       nonEu:true,jds:"",awb:"",customsValue:2059,duty:0,procFee:0},
+     {id:x.seq.shipment++,tracking:"PPL-IN-33012",carrier:"PPL",direction:"inbound",status:"Doručené",from:"Dodávateľ ASIC-CZ s.r.o.",to:"Sklad 1 — Praha",exp:"2026-07-08",paid:true,payAmt:52000,payCur:"CZK",cryptoTx:"",invoice:"FP-2026-221",
+       sender:"ASIC-CZ s.r.o. (dodávateľ)",contents:"5× Iceriver KS5M",ourOrder:"",custPay:"",shipCost:0,shipCostCur:"CZK",paidWhere:"bankový prevod",
+       nonEu:false,jds:"",awb:"",customsValue:0,duty:0,procFee:0}
+    );
+    x._shipV9=true;
+  }
+  // viac náhodných zásielok + prichádzajúce v doprave sa objavia v zásobách (doručuje sa)
+  if(!x._shipRnd){
+    const rnd=a=>a[Math.floor(Math.random()*a.length)];
+    const carriers=["DHL","UPS","PPL","GLS","FedEx","Packeta","DPD"];
+    const openIn=["V doprave","Vyzdvihnuté","Colné konanie","Na ceste"],closed=["Doručené","Vrátené"];
+    const cities=["Praha","Brno","Bratislava","Wien","Berlín","New York, USA","Shenzhen, ČN","Košice","Varšava"];
+    const asicPids=x.products.filter(p=>p.categoryId===3).map(p=>p.id);
+    const inc=["EXW","FCA","CPT","CIP","DAP","DPU","DDP","FOB","CIF"];
+    for(let i=0;i<12;i++){
+      const dir=rnd(["inbound","outbound","outbound","inbound","dropship"]);
+      const open=Math.random()<0.55;const status=open?rnd(openIn):rnd(closed);
+      const exp=new Date(Date.now()+(open?1:-1)*Math.floor(1+Math.random()*12)*86400000).toISOString().slice(0,10);
+      const pid=rnd(asicPids);const pr=x.products.find(pp=>pp.id===pid)||{};
+      const customs=Math.random()<0.4;
+      const s={id:x.seq.shipment++,tracking:rnd(carriers).slice(0,3).toUpperCase()+"-"+Math.floor(100000+Math.random()*899999),carrier:rnd(carriers),direction:dir,status,
+        from:dir==="inbound"?("Dodávateľ "+rnd(["ASIC-CZ","Bitmain HK","Iceriver","MinersEU"])):"Sklad 1 — Praha",
+        to:dir==="inbound"?"Sklad 1 — Praha":("Zákazník, "+rnd(cities)),exp,
+        sender:dir==="inbound"?rnd(["ASIC-CZ s.r.o.","Bitmain (HK)","MinersEU GmbH"]):"",
+        contents:(rnd([1,1,2,3]))+"× "+(pr.name||"ASIC"),ourOrder:dir==="inbound"?"":"NAŠA-2026-0"+(100+i),
+        paid:Math.random()<0.6,paidWhere:dir==="inbound"?rnd(["bankový prevod","proforma","dobierka"]):"",invoice:Math.random()<0.5?"FA-2026-"+(200+i):"",
+        payAmt:pr.price||1000,payCur:"USD",cryptoTx:"",custPay:dir==="inbound"?"":rnd(["proforma","deposit","cod"]),
+        shipCost:dir==="inbound"?0:Math.floor(50+Math.random()*250),shipCostCur:"EUR",
+        customs,nonEu:customs,incoterm:rnd(inc),jds:customs?("26CZ6000"+Math.floor(10000+Math.random()*89999)+"CABG"):"",awb:customs?("1Z"+Math.floor(1e8+Math.random()*8e8)):"",
+        customsValue:customs?(pr.price||1000):0,duty:customs?Math.floor(Math.random()*200):0,procFee:customs?rnd([0,25,35,50]):0,
+        productId:pid,qty:rnd([1,1,2,3])};
+      x.shipments.push(s);
+      // prichádzajúce v doprave → pending položka v zásobách
+      if(dir==="inbound"&&open&&pid){x.inventory.push({id:db_seq_inv(x),productId:pid,warehouseId:1,location:"—",status:"na_ceste",track:"unit",quantity:s.qty,serial:"",qr:"",state:"new",stateNote:"",note:"doručuje sa",expected:exp,shipmentId:s.id,buyPrice:pr.price||null,buyCur:"USD",buyDate:"",invoice:s.invoice||"",counted:false});}
+    }
+    x._shipRnd=true;
+  }
+  return x;
+}
+function db_seq_inv(x){x.seq.inventory=x.seq.inventory||1;return x.seq.inventory++;}
+function migrateV11(x){
+  x.companies=x.companies||[{name:"OneMiners",web:"https://oneminers.com"},{name:"Firma 2",web:"https://firma2.example"},{name:"Firma 3",web:"https://firma3.example"}];
+  (x.shipments||[]).forEach(s=>{if(!s.items){s.items=[];if(s.productId){s.items.push({productId:s.productId,qty:s.qty||1});}}});
+  return x;
+}
+
+// ================= HELPERS =================
+const $=s=>document.querySelector(s);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function cur(code){return db.currencies.find(c=>c.code===code);}
+function localeOf(){return lang==="en"?"en-US":lang==="cs"?"cs-CZ":"sk-SK";}
+function money(amt,code){if(amt==null||amt==="")return "—";const c=cur(code)||{decimals:2,type:"fiat"};const n=Number(amt).toLocaleString(localeOf(),{minimumFractionDigits:0,maximumFractionDigits:c.decimals});return `<span class="${c.type==='crypto'?'crypto':''}">${n} ${esc(code)}</span>`;}
+function can(perm){return !!(db.matrix[state.role]&&db.matrix[state.role][perm]);}
+function whName(id){const w=db.warehouses.find(w=>w.id===id);return w?w.name:"—";}
+function prod(id){return db.products.find(p=>p.id===id);}
+function catById(id){return db.categories.find(c=>c.id===id);}
+function catLabel(c){return c?(c.nm?(c.nm[lang]||c.nm.sk):c.name):"—";}
+function catName(id){return catLabel(catById(id));}
+function ancestors(id){const out=[];let c=catById(id);while(c){out.push(c.id);c=c.parent?catById(c.parent):null;}return out;}
+function catPath(id){const c=catById(id);if(!c)return "—";return c.parent?catLabel(catById(c.parent))+" › "+catLabel(c):catLabel(c);}
+function attrsForCat(catId){const anc=ancestors(catId);return db.attrDefs.filter(d=>anc.includes(d.cat));}
+function attrLabel(d){return d.label[lang]||d.label.sk;}
+const statusTag={skladom:"g",na_ceste:"o",pending:"b",odpisane:"gr"};
+const shipTag=s=>({["Doručené"]:"g","Doručeno":"g","Delivered":"g",["V doprave"]:"b","In transit":"b",["Vrátené"]:"r","Vráceno":"r","Returned":"r"}[s]||"gr");
+// similarity
+function stripDia(s){return s.normalize("NFD").replace(/[̀-ͯ]/g,"");}
+function normKey(s){s=stripDia((s||"").toLowerCase());s=s.replace(/(\d),(\d)/g,"$1.$2");s=s.replace(/(\d+(?:\.\d+)?)\s*cm\b/g,(m,n)=>((+n)/100));s=s.replace(/[^a-z0-9]+/g," ");return s.replace(/\s+/g," ").trim();}
+function tokens(s){return [...new Set(normKey(s).split(" ").filter(w=>w.length>1))];}
+function lev(a,b){if(a===b)return 0;const m=a.length,n=b.length;if(Math.abs(m-n)>1)return 2;const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);for(let j=0;j<=n;j++)dp[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return dp[m][n];}
+function tokMatch(x,B){return B.some(y=>x===y||((x.length>=4||y.length>=4)&&lev(x,y)<=1));}
+function jaccard(a,b){const A=tokens(a),B=tokens(b);if(!A.length||!B.length)return 0;let inter=0;A.forEach(x=>{if(tokMatch(x,B))inter++;});return inter/(A.length+B.length-inter);}
+function nameOfProduct(p){return [p.name,p.desc,...(p.aliases||[]),p.brand,p.model].filter(Boolean).join(" ");}
+function similarity(a,b){if(a.sku&&b.sku&&a.sku.toLowerCase()===b.sku.toLowerCase())return 1;let s=jaccard(nameOfProduct(a),nameOfProduct(b));if(a.categoryId===b.categoryId)s+=0.08;return Math.min(1,s);}
+
+// ================= STATE / ROUTER =================
+const state={view:"dash",role:"admin",q:"",fbrand:"",fcat:"",fsub:"",ftag:"",fattrs:{},
+  iq:"",iwh:"",iloc:"",icat:"",istate:"",isel:[],iexp:[],docType:"",docQ:"",stOnlyDue:false,aq:"",shDir:"",shPaid:"",shOpen:false};
+const app={
+  setRole(r){state.role=r;render();},
+  setLang(l){lang=l;localStorage.setItem("skladapp_lang",l);document.documentElement.lang=l;applyStatic();render();},
+  go(v){state.view=v;state.q="";state.fbrand="";state.fcat="";state.fsub="";state.ftag="";state.fattrs={};
+    state.iq="";state.iwh="";state.iloc="";state.icat="";state.istate="";state.isel=[];state.iexp=[];state.docType="";state.docQ="";state.stOnlyDue=false;state.aq="";state.shDir="";state.shPaid="";state.shOpen=false;
+    document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active",a.dataset.v===v));render();}
+};
+document.querySelectorAll("#nav a").forEach(a=>a.addEventListener("click",()=>app.go(a.dataset.v)));
+function applyStatic(){$("#brand").innerHTML=`${t("app.title")}<small>${t("app.subtitle")}</small>`;document.querySelectorAll("[data-t]").forEach(el=>el.textContent=t(el.dataset.t));$("#lang").value=lang;}
+
+// ================= MODAL =================
+function modal(title,bodyHTML,footHTML){$("#modal").innerHTML=`<div class="mh"><span>${title}</span><span class="x" onclick="closeModal()">×</span></div><div class="mb">${bodyHTML}</div><div class="mf">${footHTML}</div>`;$("#ov").classList.add("show");}
+function closeModal(){$("#ov").classList.remove("show");}
+$("#ov").addEventListener("click",e=>{if(e.target.id==="ov")closeModal();});
+function curOptions(sel){return db.currencies.filter(c=>c.active).map(c=>`<option value="${c.code}" ${c.code===sel?"selected":""}>${c.code} — ${esc(c.name)}${c.type==='crypto'?' ('+t("cu.crypto")+')':''}</option>`).join("");}
+
+// ================= IMAGE HOVER PREVIEW =================
+const prev=$("#imgprev");
+document.addEventListener("mouseover",e=>{const th=e.target.closest(".thumb");if(th&&th.dataset.full){prev.querySelector("img").src=th.dataset.full;prev.querySelector(".cap").textContent=th.dataset.cap||"";prev.style.display="block";pos(e);}});
+document.addEventListener("mousemove",e=>{if(prev.style.display==="block")pos(e);});
+document.addEventListener("mouseout",e=>{if(e.target.closest(".thumb"))prev.style.display="none";});
+function pos(e){let x=e.clientX+18,y=e.clientY+18;if(x+260>innerWidth)x=e.clientX-278;if(y+280>innerHeight)y=innerHeight-290;prev.style.left=x+"px";prev.style.top=y+"px";}
+
+// ================= VIEWS =================
+function render(){const v=state.view;({dash,products,inventory,docs,stocktake,assets,qr:qrprint,shipments,dedup,roles,users,currencies}[v]||dash)();}
+function curUser(){return db.users.find(u=>u.role===state.role)||{id:0,name:state.role};}
+function logMove(o){db.movements.push(Object.assign({id:db.seq.movement++,at:new Date().toISOString(),userId:curUser().id},o));}
+// ===== EXPORT (CSV / Excel) — len admin a user =====
+function canExport(){return state.role==="admin"||state.role==="user";}
+function exportBtn(fn){return canExport()?`<button class="btn ghost" onclick="${fn}()">${t("c.export")}</button>`:"";}
+function exportCSV(name,headers,rows){
+  const sep=";",q=v=>{v=(v==null?"":String(v));return /[";\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const csv="﻿"+[headers.map(q).join(sep),...rows.map(r=>r.map(q).join(sep))].join("\r\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));a.download=name+"_"+new Date().toISOString().slice(0,10)+".csv";document.body.appendChild(a);a.click();a.remove();
+}
+function productsExport(){exportCSV("produkty",["Názov","Značka","Model","Kategória","Typ","Cena","Mena","Hmotnosť(g)","SKU","Tagy"],
+  db.products.filter(p=>can("premium.view")||!p.premium).map(p=>[p.name,p.brand||"",p.model||"",catPath(p.categoryId),p.type==="assembly"?"zostava":"jednoduchý",p.price==null?"":p.price,p.currency||"",p.weight||"",p.sku||"",(p.tags||[]).join(", ")]));}
+function inventoryExport(){exportCSV("zasoby",["Produkt","Sklad","Pozícia","Množstvo","Evidencia","Sériové č.","QR","Stav","StavPozn","Statusklad","Nákup.cena","Mena","Nákup","Faktúra"],
+  db.inventory.filter(invMatch).map(l=>{const p=prod(l.productId)||{};return [p.name||"",whName(l.warehouseId),l.location||"",l.quantity,l.track,l.serial||"",l.qr||"",l.state,l.stateNote||"",l.status||"skladom",l.buyPrice==null?"":l.buyPrice,l.buyCur||"",l.buyDate||"",l.invoice||""];}));}
+function docsExport(){let list=db.movements.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||""));if(state.docType==="in")list=list.filter(m=>m.type==="prijem");if(state.docType==="out")list=list.filter(m=>m.type==="vydaj");
+  exportCSV("doklady",["Dátum","Typ","Produkt","Množstvo","Sklad","Pozícia","Sériové č.","Používateľ","Doklad","Spôsob","Účel"],
+  list.map(m=>{const p=prod(m.productId)||{};const u=(db.users.find(u=>u.id===m.userId)||{}).name||"";return [(m.at||"").replace("T"," ").slice(0,16),m.type,p.name||"",m.qty,whName(m.warehouseId),m.location||"",moveSerial(m),u,m.doc||"",m.via||"",m.purpose||""];}));}
+function shipmentsExport(){exportCSV("zasielky",["Tracking","Prepravca","Smer","Stav","Z","Do","Odosielateľ","Obsah","NašaObj","Platba zák.","Cena prepravy","Zaplatené","Faktúra","JDS","AWB","Colná hodnota","Clo","Poplatok"],
+  db.shipments.map(s=>[s.tracking,s.carrier||"",s.direction,s.status||"",s.from||"",s.to||"",s.sender||"",s.contents||"",s.ourOrder||"",s.custPay||"",s.shipCost==null?"":s.shipCost+" "+(s.shipCostCur||""),s.paid?"áno":"nie",s.invoice||"",s.jds||"",s.awb||"",s.customsValue||"",s.duty||"",s.procFee||""]));}
+function assetsExport(){exportCSV("majetok",["Názov","Pridelené","Umiestnenie","Sériové č.","Obstaranie","Stav","Poznámka"],
+  db.assets.map(a=>[assetName(a),a.assigned||"",a.location||"",a.serial||"",a.acquired||"",a.state||"",a.note||""]));}
+function shell(title,sub,actions,body){$("#main").innerHTML=`<div class="head"><div><h1>${title}</h1><div class="sub">${sub||""}</div></div><div>${actions||""}</div></div>${body}`;}
+
+function dash(){
+  const onWay=db.inventory.filter(i=>i.status==="na_ceste").length;
+  const cards=`<div class="cards">
+    <div class="kpi"><div class="n">${db.products.length}</div><div class="l">${t("dash.kpi_products")}</div><div class="bar" style="background:var(--blue)"></div></div>
+    <div class="kpi"><div class="n">${db.inventory.length}</div><div class="l">${t("dash.kpi_units")}</div><div class="bar" style="background:var(--green)"></div></div>
+    <div class="kpi"><div class="n">${onWay}</div><div class="l">${t("dash.kpi_onway")}</div><div class="bar" style="background:var(--orange)"></div></div>
+    <div class="kpi"><div class="n">${db.shipments.length}</div><div class="l">${t("dash.kpi_ship")}</div><div class="bar" style="background:var(--purple)"></div></div></div>`;
+  const perWh=db.warehouses.map(w=>`<tr><td>${esc(w.name)}</td><td>${db.inventory.filter(i=>i.warehouseId===w.id).length}</td></tr>`).join("");
+  const recent=db.shipments.slice(-4).reverse().map(s=>`<tr><td><b>${esc(s.tracking)}</b></td><td>${esc(s.carrier)}</td><td><span class="tag ${shipTag(s.status)}">${esc(s.status)}</span></td><td>${money(s.payAmt,s.payCur)}</td></tr>`).join("");
+  shell(t("dash.title"),t("dash.sub"),`<button class="btn ghost sm" onclick="resetData()">${t("c.reset")}</button>`,
+    cards+`<div class="panel"><div class="ph"><h3>${t("dash.stock_by_wh")}</h3></div><table><thead><tr><th>${t("dash.warehouse")}</th><th>${t("dash.units_count")}</th></tr></thead><tbody>${perWh}</tbody></table></div>
+     <div class="panel"><div class="ph"><h3>${t("dash.recent")}</h3></div><table><thead><tr><th>${t("dash.tracking")}</th><th>${t("dash.carrier")}</th><th>${t("dash.status")}</th><th>${t("dash.payment")}</th></tr></thead><tbody>${recent}</tbody></table></div>`);
+}
+
+// ---- PRODUCTS ----
+function products(){
+  const seePrem=can("premium.view"),canEdit=can("product.edit"),canDel=can("product.delete");
+  let list=db.products.filter(p=>seePrem||!p.premium);
+  if(state.fbrand)list=list.filter(p=>p.brand===state.fbrand);
+  const effCat=state.fsub||state.fcat;
+  if(effCat)list=list.filter(p=>ancestors(p.categoryId).includes(Number(effCat)));
+  if(state.ftag)list=list.filter(p=>(p.tags||[]).includes(state.ftag));
+  Object.entries(state.fattrs).forEach(([k,v])=>{if(v)list=list.filter(p=>String((p.attrs||{})[k])===v);});
+  if(state.q){const q=state.q.toLowerCase();list=list.filter(p=>(p.name+" "+(p.desc||"")+" "+(p.sku||"")+" "+(p.aliases||[]).join(" ")+" "+(p.tags||[]).join(" ")+" "+(p.brand||"")+" "+catName(p.categoryId)).toLowerCase().includes(q));}
+  const rows=list.map(p=>{
+    const thumb=p.image?`<img class="thumb" src="${esc(p.image)}" data-full="${esc(p.image)}" data-cap="${esc(p.name)}">`:`<span class="thumb"></span>`;
+    const asmBadge=p.type==="assembly"?` <span class="tag o">${t("p.assembly_badge")} · ${(p.components||[]).length}</span>`:"";
+    const tags=(p.tags||[]).length?`<div class="tagline">${p.tags.map(x=>`<span class="t" style="cursor:pointer" title="${esc(t("iv.filter_by_tag",{x}))}" onclick="filterByTag('${esc(x)}')">#${esc(x)}</span>`).join("")}</div>`:"";
+    const alias=(p.aliases||[]).length?` <span class="pill">${t("p.alias")}: ${esc(p.aliases.join(", "))}</span>`:"";
+    const src=p.source&&p.source!=="manual"?` <span class="pill">${esc(p.source)}</span>`:"";
+    return `<tr>
+     <td>${thumb}</td>
+     <td><span class="link" onclick="openDetail(${p.id})">${esc(p.name)}</span>${asmBadge}${p.premium?' <span class="tag p">'+t("p.premium")+'</span>':''}<div class="muted" style="font-size:11.5px">${esc(p.desc||"")}${p.sku?' · '+esc(p.sku):''}${alias}${src}</div>${tags}</td>
+     <td>${esc(p.brand||"—")}</td>
+     <td>${esc(catPath(p.categoryId))}</td>
+     <td>${money(p.price,p.currency)} <span class="info" title="${esc(t("info.by")+": "+p.priceBy+" • "+(p.priceSrc==='internet'?t("info.internet"):t("info.manual"))+" • "+t("info.updated")+" "+p.priceAt)}">i</span></td>
+     <td style="text-align:right;white-space:nowrap">${canEdit?`<button class="btn ghost sm" onclick="editProduct(${p.id})">${t("c.edit")}</button>`:''} ${canDel?`<button class="btn danger sm" onclick="delProduct(${p.id})">${t("c.delete")}</button>`:''}</td>
+   </tr>`;}).join("")||`<tr><td colspan="6"><div class="empty">${t("c.none")}</div></td></tr>`;
+  // filters
+  const brandOpts=`<option value="">${t("p.filter_brand")}</option>`+db.brands.map(b=>`<option value="${esc(b)}" ${state.fbrand===b?"selected":""}>${esc(b)}</option>`).join("");
+  const catOpts=`<option value="">${t("p.filter_cat")}</option>`+db.categories.filter(c=>!c.parent).map(c=>`<option value="${c.id}" ${String(state.fcat)===String(c.id)?"selected":""}>${esc(catLabel(c))}</option>`).join("");
+  const subs=state.fcat?db.categories.filter(c=>c.parent===Number(state.fcat)):[];
+  const subOpts=`<option value="">${t("p.filter_sub")}</option>`+subs.map(c=>`<option value="${c.id}" ${String(state.fsub)===String(c.id)?"selected":""}>${esc(catLabel(c))}</option>`).join("");
+  const tagOpts=`<option value="">${t("p.filter_tag")}</option>`+db.tags.map(x=>`<option value="${esc(x.name)}" ${state.ftag===x.name?"selected":""}>#${esc(x.name)}</option>`).join("");
+  // dynamic attribute filters for effective category
+  let attrFilters="";
+  if(effCat){attrsForCat(Number(effCat)).filter(d=>d.filter&&d.type==="enum").forEach(d=>{
+    attrFilters+=`<select onchange="state.fattrs['${d.key}']=this.value;products()"><option value="">${esc(attrLabel(d))}: ${t("c.none")}</option>${d.options.map(o=>`<option value="${esc(o)}" ${state.fattrs[d.key]===o?"selected":""}>${esc(attrLabel(d))}: ${esc(o)}</option>`).join("")}</select>`;});}
+  shell(t("p.title"),t("p.sub"),(canEdit?`<button class="btn" onclick="editProduct()">${t("p.new")}</button> `:"")+exportBtn("productsExport"),
+    `<div class="toolbar">
+       <input type="search" placeholder="${t("p.search")}" oninput="state.q=this.value;products()" value="${esc(state.q)}">
+       <select onchange="state.fbrand=this.value;products()">${brandOpts}</select>
+       <select onchange="state.fcat=this.value;state.fsub='';state.fattrs={};products()">${catOpts}</select>
+       <select onchange="state.fsub=this.value;products()" ${subs.length?"":"disabled"}>${subOpts}</select>
+       <select onchange="state.ftag=this.value;products()">${tagOpts}</select>
+       ${attrFilters}
+     </div>
+     <div class="panel"><table><thead><tr><th></th><th>${t("p.col_product")}</th><th>${t("p.col_brand")}</th><th>${t("p.col_category")}</th><th>${t("p.col_price")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+     ${!seePrem?'<div class="note">'+t("p.premium_note")+'</div>':''}`);
+}
+
+// ---- PRODUCT DETAIL ----
+function filterByTag(x){state.view="products";state.ftag=x;document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active",a.dataset.v==="products"));products();}
+function openDetail(id){
+  const p=prod(id);if(!p)return;
+  const attrs=attrsForCat(p.categoryId).filter(d=>(p.attrs||{})[d.key]!==undefined&&(p.attrs||{})[d.key]!=="").map(d=>`<div class="kv"><div class="k">${esc(attrLabel(d))}</div><div>${esc((p.attrs||{})[d.key])}${d.unit?" "+esc(d.unit):""}</div></div>`).join("")||`<div class="muted" style="font-size:12.5px">${t("c.none")}</div>`;
+  const comps=p.type==="assembly"?`<div class="box"><h4>${t("det.components")}</h4>${(p.components||[]).map(c=>{const cp=prod(c.productId);return `<div class="kv"><div class="k">${esc(cp?cp.name:"?")}</div><div>× ${c.qty}</div></div>`;}).join("")||t("c.none")}</div>`:"";
+  const tags=(p.tags||[]).length?`<div class="tagline" style="margin-top:0">${p.tags.map(x=>`<span class="t">#${esc(x)}</span>`).join("")}</div>`:`<span class="muted" style="font-size:12.5px">—</span>`;
+  modal(t("det.title"),
+   `${p.image?`<img class="detimg" src="${esc(p.image)}">`:""}
+    <h3 style="margin-bottom:2px">${esc(p.name)}</h3>
+    <div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(p.brand||"")} ${esc(p.model||"")} · ${esc(catPath(p.categoryId))} · ${p.type==="assembly"?t("type.assembly"):t("type.simple")}${p.sku?" · "+esc(p.sku):""}</div>
+    <div class="box"><h4>${t("det.price")}</h4>${money(p.price,p.currency)} <span class="muted" style="font-size:11.5px">· ${esc(t("info.by")+": "+p.priceBy+", "+t("info.updated")+" "+p.priceAt)}</span>${p.weight?`<div class="kv" style="margin-top:6px"><div class="k">${t("det.weight")}</div><div>${esc(p.weight)} g</div></div>`:""}</div>
+    ${p.longDesc?`<div class="box"><h4>${t("det.long")}</h4><div style="font-size:13px;white-space:pre-wrap">${esc(p.longDesc)}</div></div>`:""}
+    <div class="box"><h4>${t("det.attributes")}</h4>${attrs}</div>
+    ${comps}
+    <div class="box"><h4>${t("det.tags")}</h4>${tags}</div>
+    <div class="muted" style="font-size:11.5px">${t("det.source")}: ${esc(p.source||"manual")}${p.externalId?" · id "+esc(p.externalId):""}</div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.close")}</button>${can("product.edit")?`<button class="btn" onclick="editProduct(${p.id})">${t("c.edit")}</button>`:""}`);
+}
+
+// ---- PRODUCT FORM ----
+let formComponents=[],formTags=[],formAttrs={},editId=0;
+function editProduct(id){
+  editId=id||0;
+  const p=id?prod(id):{price:"",currency:"CZK",premium:false,priceSrc:"manual",type:"simple",brand:""};
+  formComponents=id&&p.components?JSON.parse(JSON.stringify(p.components)):[];
+  formTags=(id&&p.tags)?p.tags.slice():[];
+  formAttrs=(id&&p.attrs)?JSON.parse(JSON.stringify(p.attrs)):{};
+  const c=catById(p.categoryId);const mainId=c?(c.parent||c.id):(db.categories.find(x=>!x.parent)||{}).id;const subId=c&&c.parent?c.id:"";
+  modal(id?t("pf.edit"):t("pf.new"),
+   `<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn ghost sm" type="button" onclick="byPhoto()">${t("pf.by_photo")}</button>
+      <button class="btn ghost sm" type="button" onclick="importSales()">${t("pf.import")}</button>
+    </div>
+    <div class="box"><h4>${t("pf.builder")}</h4>
+      <div class="row2">
+        <div class="fld"><label>${t("pf.brand")}</label><select id="f_brand" onchange="onBrand()"><option value=""></option>${db.brands.map(b=>`<option value="${esc(b)}" ${b===p.brand?"selected":""}>${esc(b)}</option>`).join("")}<option value="__new">${t("pf.newbrand")}</option></select></div>
+        <div class="fld"><label>${t("pf.model")}</label><input id="f_model" value="${esc(p.model||"")}" oninput="checkDup()"></div>
+      </div>
+      <div class="fld" style="margin-bottom:8px"><label>${t("pf.spec")}</label><input id="f_spec" placeholder="${t("pf.spec_ph")}"></div>
+      <button class="btn ghost sm" type="button" onclick="buildName()">${t("pf.build")}</button>
+    </div>
+    <div class="fld"><label>${t("pf.name")}</label><input id="f_name" value="${esc(p.name||"")}" oninput="checkDup()"></div>
+    <div id="f_dup"></div>
+    <div class="fld"><label>${t("pf.desc")}</label><input id="f_desc" value="${esc(p.desc||"")}" placeholder="${t("pf.desc_ph")}"></div>
+    <div class="fld"><label>${t("pf.desc_long")}</label><textarea id="f_long" placeholder="${t("pf.desc_long_ph")}">${esc(p.longDesc||"")}</textarea></div>
+    <div class="row2">
+      <div class="fld"><label>${t("pf.category")}</label><select id="f_maincat" onchange="onMainCat()">${db.categories.filter(x=>!x.parent).map(x=>`<option value="${x.id}" ${x.id===mainId?"selected":""}>${esc(catLabel(x))}</option>`).join("")}<option value="__new">${t("pf.newcat")}</option></select></div>
+      <div class="fld"><label>${t("pf.subcategory")}</label><select id="f_subcat"></select></div>
+    </div>
+    <div class="row2"><div class="fld"><label>${t("pf.sku")}</label><input id="f_sku" value="${esc(p.sku||"")}" oninput="checkDup()"></div>
+    <div class="fld"><label>${t("pf.type")}</label><select id="f_type" onchange="toggleComp(this.value)"><option value="simple" ${p.type!=="assembly"?"selected":""}>${t("type.simple")}</option><option value="assembly" ${p.type==="assembly"?"selected":""}>${t("type.assembly")}</option></select></div></div>
+    <div class="box"><h4>${t("pf.attributes")}</h4><button class="btn ghost sm" type="button" onclick="fetchParams()" style="margin-bottom:10px">${t("pf.fetch_params")}</button><div id="f_attrs"></div></div>
+    <div class="fld"><label>${t("pf.tags")}</label><div id="f_tags" class="sugg"></div><button class="btn ghost sm" type="button" onclick="addTag()" style="margin-top:6px">${t("pf.add_tag")}</button></div>
+    <div class="row3"><div class="fld"><label>${t("pf.price")}</label><input id="f_price" type="number" step="any" value="${esc(p.price)}"></div>
+    <div class="fld"><label>${t("pf.currency")}</label><select id="f_cur">${curOptions(p.currency||"CZK")}</select></div>
+    <div class="fld"><label>${t("pf.weight")}</label><input id="f_weight" type="number" step="any" value="${esc(p.weight)}"></div></div>
+    <div class="row2"><div class="fld"><label>${t("pf.price_src")}</label><select id="f_src"><option value="manual" ${p.priceSrc!=="internet"?"selected":""}>${t("pf.src_manual")}</option><option value="internet" ${p.priceSrc==="internet"?"selected":""}>${t("pf.src_internet")}</option></select></div>
+    <div class="fld"><label>${t("pf.image")}</label><input id="f_img" value="${esc(p.image||"")}"></div></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center"><button class="btn ghost sm" type="button" onclick="findImage()">${t("pf.find_image")}</button>
+    <div class="chk" style="margin-left:auto"><input type="checkbox" id="f_prem" ${p.premium?"checked":""}><label style="margin:0">${t("pf.premium")}</label></div></div>
+    <div id="f_compbox" style="display:${p.type==="assembly"?"block":"none"}">
+      <div class="fld"><label>${t("pf.components")}</label><div id="f_comps"></div><button class="btn ghost sm" type="button" onclick="addComp()">${t("pf.add_component")}</button></div>
+    </div>
+    <div class="note">${t("pf.ai_note")}</div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="saveProduct()">${t("c.save")}</button>`);
+  fillSub(mainId,subId);renderAttrs();renderComps();renderTags();checkDup();
+}
+function currentCatId(){const sub=$("#f_subcat")?$("#f_subcat").value:"";const main=$("#f_maincat")?$("#f_maincat").value:"";return (sub&&sub!=="__new")?Number(sub):Number(main);}
+function onBrand(){if($("#f_brand").value==="__new"){const n=prompt(t("pf.newbrand_prompt"));if(n&&n.trim()){if(!db.brands.includes(n.trim())){db.brands.push(n.trim());save();}editProduct(editId);/*reopen keeps state? simpler: */ $("#f_brand")&&($("#f_brand").value=n.trim());}else{$("#f_brand").value="";}}checkDup();}
+function onMainCat(){const v=$("#f_maincat").value;if(v==="__new"){const name=prompt(t("pf.newcat_prompt"));if(name&&name.trim()){const c={id:db.seq.category++,parent:null,nm:nm(name.trim(),name.trim(),name.trim())};db.categories.push(c);save();editProduct(editId);return;}else{$("#f_maincat").value=db.categories.find(x=>!x.parent).id;}}fillSub(Number($("#f_maincat").value),"");renderAttrs();renderTags();checkDup();}
+function fillSub(mainId,subId){
+  const box=$("#f_subcat");if(!box)return;const subs=db.categories.filter(c=>c.parent===mainId);
+  box.innerHTML=`<option value="">${t("pf.none_sub")}</option>`+subs.map(s=>`<option value="${s.id}" ${s.id===subId?"selected":""}>${esc(catLabel(s))}</option>`).join("")+`<option value="__new">${t("pf.newcat")}</option>`;
+  box.onchange=function(){if(this.value==="__new"){const name=prompt(t("pf.newsub_prompt"));if(name&&name.trim()){const c={id:db.seq.category++,parent:Number($("#f_maincat").value),nm:nm(name.trim(),name.trim(),name.trim())};db.categories.push(c);save();fillSub(c.parent,c.id);}else{this.value="";}}renderAttrs();renderTags();};
+}
+function renderAttrs(){
+  const box=$("#f_attrs");if(!box)return;const defs=attrsForCat(currentCatId());
+  if(!defs.length){box.innerHTML=`<div class="muted" style="font-size:12.5px">${t("pf.no_attrs")}</div>`;return;}
+  box.innerHTML=`<div class="attrgrid">`+defs.map(d=>{
+    const val=formAttrs[d.key]!==undefined?formAttrs[d.key]:"";
+    let input;
+    if(d.type==="enum")input=`<select onchange="formAttrs['${d.key}']=this.value"><option value=""></option>${d.options.map(o=>`<option value="${esc(o)}" ${String(val)===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
+    else input=`<input type="${d.type==="number"?"number":"text"}" step="any" value="${esc(val)}" onchange="formAttrs['${d.key}']=this.value">`;
+    return `<div class="fld" style="margin-bottom:0"><label>${esc(attrLabel(d))}${d.unit?" ("+esc(d.unit)+")":""}</label>${input}</div>`;
+  }).join("")+`</div>`;
+}
+function toggleComp(v){$("#f_compbox").style.display=v==="assembly"?"block":"none";}
+function addComp(){formComponents.push({productId:db.products.filter(p=>p.type!=="assembly")[0]?.id||db.products[0].id,qty:1});renderComps();}
+function rmComp(i){formComponents.splice(i,1);renderComps();}
+function renderComps(){const box=$("#f_comps");if(!box)return;if(!formComponents.length){box.innerHTML=`<div class="muted" style="font-size:12px;margin-bottom:6px">${t("pf.no_components")}</div>`;return;}box.innerHTML=formComponents.map((c,i)=>`<div class="comp-row"><select onchange="formComponents[${i}].productId=Number(this.value)">${db.products.filter(p=>p.type!=="assembly").map(p=>`<option value="${p.id}" ${p.id===c.productId?"selected":""}>${esc(p.name)}</option>`).join("")}</select><input type="number" min="1" value="${c.qty}" onchange="formComponents[${i}].qty=Number(this.value)"><button class="btn danger sm" type="button" onclick="rmComp(${i})">×</button></div>`).join("");}
+function suggestedTags(){const anc=ancestors(currentCatId());return db.tags.filter(x=>!x.cats.length||x.cats.some(c=>anc.includes(c)));}
+function renderTags(){const box=$("#f_tags");if(!box)return;const sug=suggestedTags().map(x=>x.name);const show=[...new Set([...sug,...formTags])];box.innerHTML=show.map(x=>`<span class="chip tag ${formTags.includes(x)?"on":""}" onclick="toggleTag('${esc(x)}')">#${esc(x)}</span>`).join("")||`<span class="muted" style="font-size:12px">—</span>`;}
+function toggleTag(x){const i=formTags.indexOf(x);if(i>=0)formTags.splice(i,1);else formTags.push(x);renderTags();}
+function addTag(){
+  let x=prompt(t("pf.add_tag_prompt"));if(!x||!x.trim())return;x=x.trim();
+  // kontrola duplicity tagu (preklepy / varianty)
+  const similar=db.tags.map(tg=>tg.name).find(n=>n.toLowerCase()===x.toLowerCase()||lev(normKey(n),normKey(x))<=1||normKey(n)===normKey(x));
+  if(similar&&similar.toLowerCase()!==x.toLowerCase()){if(confirm(t("pf.tag_dupe",{x:similar}))){x=similar;}}
+  const exists=db.tags.find(tg=>tg.name.toLowerCase()===x.toLowerCase());
+  if(!exists){db.tags.push({name:x,cats:currentCatId()?[currentCatId()]:[]});save();}
+  if(!formTags.includes(x))formTags.push(x);renderTags();
+}
+function findImage(){const q=encodeURIComponent(($("#f_name").value+" "+($("#f_brand").value||"")+" "+($("#f_model").value||"")).trim());window.open("https://www.google.com/search?tbm=isch&q="+q,"_blank");}
+function byPhoto(){alert(t("pf.by_photo_note"));window.open("https://lens.google.com/","_blank");}
+function fetchParams(){alert(t("pf.fetch_params_note"));const q=encodeURIComponent(($("#f_name").value+" "+($("#f_brand").value||"")+" "+($("#f_model").value||"")+" specifikace").trim());window.open("https://www.google.com/search?q="+q,"_blank");}
+function importSales(){
+  if(!confirm(t("pf.import_note")))return;
+  const demo=[
+    {sku:"EXT-RAM-32",name:"Pamäť · Kingston Fury · 32 GB 3600 MHz",desc:"RAM DDR5",brand:"Kingston",model:"Fury",categoryId:21,type:"simple",tags:["DDR4"],attrs:{capacity:32,speed:3600,mem_type:"DDR5"},price:1690,currency:"CZK",source:"sales-db",externalId:"S-10233"},
+    {sku:"EXT-ASIC-BTC",name:"ASIC · Bitmain S21 · 200 Th/s",desc:"ASIC miner BTC",brand:"Bitmain",model:"S21",categoryId:32,type:"simple",tags:["ASIC","mining"],attrs:{hashrate:200,algorithm:"SHA-256 (BTC)",power:3500,noise:75,psu:"interné"},price:5200,currency:"USD",source:"sales-db",externalId:"S-10234"}
+  ];
+  let added=0;
+  demo.forEach(d=>{if(!db.products.some(p=>p.sku===d.sku)){d.id=db.seq.product++;d.aliases=[];d.premium=false;d.image="";d.priceBy="sales-db";d.priceAt=new Date().toISOString().slice(0,10);d.priceSrc="internet";d.longDesc="";db.products.push(d);added++;}});
+  save();closeModal();products();
+}
+function normalizeSpec(raw){let s=(raw||"").trim().replace(/\s+/g," ");s=s.replace(/(\d),(\d)/g,"$1.$2");s=s.replace(/(\d+(?:\.\d+)?)\s*cm\b/gi,(m,n)=>((+n)/100).toString().replace(/\.?0+$/,"")+" m");s=s.replace(/(\d)\s*(mm|m|kg|g|w|v|a|gb|tb|th\/s|mhz|ghz)\b/gi,(m,n,u)=>{const U={mm:"mm",m:"m",kg:"kg",g:"g",w:"W",v:"V",a:"A",gb:"GB",tb:"TB","th/s":"Th/s",mhz:"MHz",ghz:"GHz"};return n+" "+(U[u.toLowerCase()]||u);});return s;}
+function buildName(){
+  const cat=catById(currentCatId());const catL=cat?catLabel(cat):"";
+  const brand=($("#f_brand").value&&$("#f_brand").value!=="__new")?$("#f_brand").value:"";const model=($("#f_model").value||"").trim();const spec=normalizeSpec($("#f_spec").value);
+  let parts=[];const bm=[brand,model].filter(Boolean).join(" ");if(bm)parts.push(bm);if(spec)parts.push(spec);
+  let core=parts.join(" · ")||($("#f_name").value||"").trim();
+  const nameOut=catL?(catL+" · "+core):core;
+  $("#f_name").value=nameOut.replace(/\s+·\s+·\s+/g," · ").trim();checkDup();
+}
+function checkDup(){
+  const box=$("#f_dup");if(!box)return;
+  const draft={name:$("#f_name").value||"",desc:$("#f_desc").value||"",sku:$("#f_sku").value||"",brand:($("#f_brand")?$("#f_brand").value:"")||"",model:$("#f_model").value||"",categoryId:currentCatId()||0,aliases:[]};
+  if(normKey(draft.name).length<3&&!draft.sku){box.innerHTML="";return;}
+  const matches=db.products.filter(p=>p.id!==editId).map(p=>({p,s:similarity(draft,p)})).filter(o=>o.s>=0.45).sort((a,b)=>b.s-a.s).slice(0,4);
+  if(!matches.length){box.innerHTML="";return;}
+  box.innerHTML=`<div class="note warn"><b>${t("pf.dup_warn")}</b>${matches.map(o=>`<div class="dupitem"><span><b>${esc(o.p.name)}</b> <span class="muted">· ${esc(catPath(o.p.categoryId))}</span></span><span><span class="score" style="background:${o.s>0.7?'#fde8e7;color:#b02a26':'#fdf0df;color:#a8630c'}">${Math.round(o.s*100)}%</span> <button class="btn ghost sm" type="button" onclick="editProduct(${o.p.id})">${t("pf.open")}</button></span></div>`).join("")}</div>`;
+}
+function saveProduct(){
+  const type=$("#f_type").value;const catId=currentCatId();
+  const brand=($("#f_brand").value&&$("#f_brand").value!=="__new")?$("#f_brand").value:"";
+  // ulož len atribúty relevantné pre kategóriu
+  const relKeys=attrsForCat(catId).map(d=>d.key);const attrs={};relKeys.forEach(k=>{if(formAttrs[k]!==undefined&&formAttrs[k]!=="")attrs[k]=formAttrs[k];});
+  const o={name:$("#f_name").value.trim(),desc:$("#f_desc").value.trim(),longDesc:$("#f_long").value.trim(),sku:$("#f_sku").value.trim(),brand,model:$("#f_model").value.trim(),
+    categoryId:catId,type,tags:formTags.slice(),attrs,weight:$("#f_weight").value===""?null:Number($("#f_weight").value),
+    price:$("#f_price").value===""?null:Number($("#f_price").value),currency:$("#f_cur").value,image:$("#f_img").value.trim(),
+    priceSrc:$("#f_src").value,premium:$("#f_prem").checked,priceBy:$("#f_src").value==="internet"?"internet":(db.users.find(u=>u.role===state.role)?.name||"User"),priceAt:new Date().toISOString().slice(0,10),
+    components:type==="assembly"?formComponents.slice():undefined};
+  if(!o.name){alert(t("pf.name"));return;}
+  if(editId){const c=prod(editId);o.aliases=c.aliases||[];o.source=c.source||"manual";o.externalId=c.externalId;Object.assign(c,o);}else{o.id=db.seq.product++;o.aliases=[];o.source="manual";db.products.push(o);}
+  save();closeModal();products();
+}
+function delProduct(id){if(confirm(t("c.delete")+"?")){db.products=db.products.filter(p=>p.id!==id);save();products();}}
+
+// ---- DEDUP ----
+function dedup(){
+  const canMerge=can("product.merge");const pairs=[];
+  for(let i=0;i<db.products.length;i++)for(let j=i+1;j<db.products.length;j++){const s=similarity(db.products[i],db.products[j]);if(s>=0.5)pairs.push({a:db.products[i],b:db.products[j],s});}
+  pairs.sort((x,y)=>y.s-x.s);
+  const body=pairs.length?`<div class="panel"><table><thead><tr><th>${t("dd.col_pair")}</th><th>${t("dd.col_score")}</th><th></th></tr></thead><tbody>`+
+    pairs.map(pr=>`<tr><td><b>${esc(pr.a.name)}</b> <span class="muted">↔</span> <b>${esc(pr.b.name)}</b><div class="muted" style="font-size:11.5px">${esc(catPath(pr.a.categoryId))} · ${esc(catPath(pr.b.categoryId))}</div></td><td><span class="score" style="background:${pr.s>0.7?'#fde8e7;color:#b02a26':'#fdf0df;color:#a8630c'}">${Math.round(pr.s*100)}%</span></td><td style="text-align:right">${canMerge?`<button class="btn sm" onclick="mergeDialog(${pr.a.id},${pr.b.id})">${t("dd.merge")}</button>`:""}</td></tr>`).join("")+`</tbody></table></div>`:`<div class="panel"><div class="empty">${t("dd.none")}</div></div>`;
+  shell(t("dd.title"),t("dd.sub"),"",body);
+}
+function mergeDialog(aId,bId){const a=prod(aId),b=prod(bId);const cnt=id=>db.inventory.filter(i=>i.productId===id).length;
+  modal(t("dd.merge_title"),`<div class="note">${t("dd.merge_note")}</div><div class="fld"><label>${t("dd.keep")}</label><label class="chk" style="margin-bottom:8px"><input type="radio" name="keep" value="${a.id}" checked> <b>${esc(a.name)}</b> <span class="muted">(${cnt(a.id)} ks · ${esc(catPath(a.categoryId))})</span></label><label class="chk"><input type="radio" name="keep" value="${b.id}"> <b>${esc(b.name)}</b> <span class="muted">(${cnt(b.id)} ks · ${esc(catPath(b.categoryId))})</span></label></div>`,`<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="doMerge(${a.id},${b.id})">${t("dd.confirm")}</button>`);}
+function doMerge(aId,bId){const keepId=Number(document.querySelector('input[name=keep]:checked').value);const dropId=keepId===aId?bId:aId;const keep=prod(keepId),drop=prod(dropId);keep.aliases=keep.aliases||[];if(drop.name&&!keep.aliases.includes(drop.name))keep.aliases.push(drop.name);(drop.aliases||[]).forEach(al=>{if(!keep.aliases.includes(al))keep.aliases.push(al);});(drop.tags||[]).forEach(tg=>{keep.tags=keep.tags||[];if(!keep.tags.includes(tg))keep.tags.push(tg);});if(!keep.sku&&drop.sku)keep.sku=drop.sku;db.inventory.forEach(i=>{if(i.productId===dropId)i.productId=keepId;});db.products.forEach(p=>{(p.components||[]).forEach(c=>{if(c.productId===dropId)c.productId=keepId;});});db.products=db.products.filter(p=>p.id!==dropId);save();closeModal();dedup();}
+
+// ---- INVENTORY (zásoby: šarže zoskupené po produkte) ----
+function locsOf(whId){const w=db.warehouses.find(w=>w.id===Number(whId));return w&&w.locations?w.locations:[];} // [{code,desc}]
+function whColor(whId){const w=db.warehouses.find(w=>w.id===Number(whId));return w&&w.color?w.color:"#5b6472";}
+function locDesc(whId,code){const l=locsOf(whId).find(x=>x.code===code);return l?l.desc:"";}
+function locOptionsHtml(whId,sel){return locsOf(whId).map(l=>`<option value="${esc(l.code)}" ${sel===l.code?"selected":""}>${esc(l.code)}${l.desc?" — "+esc(l.desc):""}</option>`).join("");}
+function invMatch(l){
+  const p=prod(l.productId)||{};
+  if(p.premium&&!can("premium.view"))return false;
+  if(state.iwh&&l.warehouseId!==Number(state.iwh))return false;
+  if(state.iloc&&l.location!==state.iloc)return false;
+  if(state.icat&&!ancestors(p.categoryId).includes(Number(state.icat)))return false;
+  if(state.istate&&l.state!==state.istate)return false;
+  if(state.iq){const q=state.iq.toLowerCase();if(!((p.name+" "+(p.sku||"")+" "+(l.serial||"")+" "+(l.qr||"")+" "+(l.location||"")).toLowerCase().includes(q)))return false;}
+  return true;
+}
+function inventory(){
+  const canMove=can("inventory.move");
+  const lots=db.inventory.filter(invMatch);
+  // zoskupiť podľa produktu
+  const groups={};lots.forEach(l=>{(groups[l.productId]=groups[l.productId]||[]).push(l);});
+  const pids=Object.keys(groups).map(Number).sort((a,b)=>(prod(a)?.name||"").localeCompare(prod(b)?.name||""));
+  let body="";
+  pids.forEach(pid=>{
+    const p=prod(pid)||{};const gl=groups[pid];
+    const totalQ=gl.reduce((s,l)=>s+(Number(l.quantity)||0),0);
+    const places=new Set(gl.map(l=>l.warehouseId+"|"+l.location)).size;
+    const whCnt=new Set(gl.map(l=>l.warehouseId)).size;
+    const exp=state.iexp.includes(pid);
+    const allSel=gl.every(l=>state.isel.includes(l.id));
+    const thumb=p.image?`<img class="thumb" src="${esc(p.image)}" data-full="${esc(p.image)}" data-cap="${esc(p.name)}">`:`<span class="thumb"></span>`;
+    // súhrn do správnych stĺpcov (žiadny colspan)
+    const whCell=whCnt===1?esc(whName(gl[0].warehouseId)):whCnt+"×";
+    const curSet=[...new Set(gl.map(l=>l.buyCur))];const prices=gl.map(l=>Number(l.buyPrice)).filter(x=>!isNaN(x));
+    let priceCell="—";
+    if(curSet.length===1&&prices.length){const mn=Math.min(...prices),mx=Math.max(...prices);priceCell=mn===mx?money(mn,curSet[0]):money(mn,curSet[0])+" – "+money(mx,curSet[0]);}
+    body+=`<tr style="background:#f4f7fb;cursor:pointer" onclick="toggleExp(${pid})">
+      <td onclick="event.stopPropagation()"><input type="checkbox" ${allSel?"checked":""} onchange="groupToggle(${pid},this.checked)"></td>
+      <td>${exp?"▾":"▸"} ${thumb} <span class="link" onclick="event.stopPropagation();openDetail(${pid})">${esc(p.name)}</span><div class="muted" style="font-size:11px">${esc(catPath(p.categoryId))} · ${gl.length} ${t("iv.lots")}</div></td>
+      <td class="muted">${whCell}</td>
+      <td class="muted">${places}×</td>
+      <td><b>${totalQ}</b></td>
+      <td class="muted"></td>
+      <td class="muted">${priceCell}</td>
+      <td></td></tr>`;
+    if(exp){gl.forEach(l=>{
+      const sel=state.isel.includes(l.id);
+      const qtyCell=l.track==="unit"
+        ? `1 ${t("iv.track_unit").split(" ")[0].toLowerCase()}<div class="muted" style="font-size:11px">${l.serial?"SN: "+esc(l.serial):""}${l.qr?" · "+esc(l.qr):""}</div>`
+        : `<b>${l.quantity}</b> ks${l.qr?`<div class="muted" style="font-size:11px">📦 ${esc(l.qr)}</div>`:""}`;
+      const wcol=whColor(l.warehouseId);
+      const transit=l.status==="na_ceste";
+      const arriving=transit&&(l.shipmentId||l.note==="doručuje sa");
+      const rowStyle=`border-left:4px solid ${wcol};${transit?(arriving?"background:#fff4e6;":"background:#fdecec;"):""}`;
+      const posCell=transit
+        ? `<span class="tag o">${arriving?t("iv.arriving"):t("iv.transit")}</span>${l.expected?`<div class="muted" style="font-size:10.5px">${t("iv.eta")}: ${esc(l.expected)}</div>`:""}`
+        : `<span class="pill" title="${esc(locDesc(l.warehouseId,l.location))}">${esc(l.location||"—")}</span>${locDesc(l.warehouseId,l.location)?`<div class="muted" style="font-size:10.5px">${esc(locDesc(l.warehouseId,l.location))}</div>`:""}`;
+      body+=`<tr style="${rowStyle}">
+        <td><input type="checkbox" ${sel?"checked":""} onchange="toggleSel(${l.id},this.checked)"></td>
+        <td class="muted" style="font-size:11.5px;padding-left:26px">↳</td>
+        <td><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${wcol};margin-right:6px;vertical-align:middle"></span>${esc(whName(l.warehouseId))}</td>
+        <td>${posCell}</td>
+        <td>${qtyCell}</td>
+        <td><span class="tag ${l.state==="new"?"g":"gr"}">${l.state==="new"?t("iv.state_new"):t("iv.state_used")}</span>${l.stateNote?`<div class="muted" style="font-size:11px">${esc(l.stateNote)}</div>`:""}${l.note?`<div><span class="tag o" style="margin-top:3px">🔖 ${esc(l.note)}</span></div>`:""}${l.counted?` <span class="tag b">${t("iv.counted")}</span>`:""}</td>
+        <td>${money(l.buyPrice,l.buyCur)}<div class="muted" style="font-size:11px">${esc(l.buyDate||"")}${l.invoice?" · "+esc(l.invoice):""}</div></td>
+        <td style="text-align:right;white-space:nowrap">${canMove?`<button class="btn ghost sm" onclick="issueDialog(${l.id})">${t("iv.issue")}</button> <button class="btn ghost sm" onclick="lotDialog(${l.id})">${t("c.edit")}</button>`:""}</td></tr>`;
+    });}
+  });
+  if(!pids.length)body=`<tr><td colspan="8"><div class="empty">${t("c.none")}</div></td></tr>`;
+  // filtre
+  const whOpts=`<option value="">${t("iv.filter_wh")}</option>`+db.warehouses.map(w=>`<option value="${w.id}" ${String(state.iwh)===String(w.id)?"selected":""}>${esc(w.name)}</option>`).join("");
+  const locList=state.iwh?locsOf(state.iwh).map(x=>({code:x.code,desc:x.desc})):[...new Set(db.inventory.map(l=>l.location))].map(c=>({code:c,desc:""}));
+  const locOpts=`<option value="">${t("iv.filter_loc")}</option>`+locList.map(l=>`<option value="${esc(l.code)}" ${state.iloc===l.code?"selected":""}>${esc(l.code)}${l.desc?" — "+esc(l.desc):""}</option>`).join("");
+  const catOpts=`<option value="">${t("iv.filter_cat")}</option>`+db.categories.filter(c=>!c.parent).map(c=>`<option value="${c.id}" ${String(state.icat)===String(c.id)?"selected":""}>${esc(catLabel(c))}</option>`).join("");
+  const stOpts=`<option value="">${t("iv.filter_state")}</option><option value="new" ${state.istate==="new"?"selected":""}>${t("iv.state_new")}</option><option value="used" ${state.istate==="used"?"selected":""}>${t("iv.state_used")}</option>`;
+  const saved=(db.invFilters&&db.invFilters[state.role])||[];
+  const savedOpts=`<option value="">${t("iv.myfilter")}</option>`+saved.map(f=>`<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("");
+  // bulk bar
+  const nsel=state.isel.length;
+  const bulk=nsel?`<div class="note" style="background:#eef4ff;border-color:#cfe0ff;color:#2a4fa0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b>${t("iv.selected",{n:nsel})}</b>
+      ${canMove?`<button class="btn sm" onclick="bulkMoveDlg()">${t("iv.bulk_move")}</button>
+      <button class="btn sm ghost" onclick="bulkStateDlg()">${t("iv.bulk_state")}</button>
+      <button class="btn sm ghost" onclick="bulkCount()">${t("iv.bulk_count")}</button>`:""}
+      <button class="btn sm ghost" onclick="clearSel()">${t("iv.clear_sel")}</button></div>`:"";
+  // aktívny filter?
+  const fActive=!!(state.iq||state.iwh||state.iloc||state.icat||state.istate);
+  const activeBar=fActive?`<div class="note" style="background:#fff4e6;border-color:#f3d9ad;color:#8a5a12;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span><b>${t("iv.filter_active")}</b></span>
+      <button class="btn sm" style="background:#e08a1e" onclick="clearInvFilters()">${t("iv.clear_filters")}</button></div>`:"";
+  shell(t("inv.title"),t("inv.sub"),
+    (canMove?`<button class="btn green" onclick="receiveDialog()">${t("iv.new_lot")}</button> <button class="btn danger" onclick="issueFind()">${t("dc.issue")}</button> `:"")+`<button class="btn ghost" onclick="manageLoc()">${t("iv.manage_loc")}</button> `+exportBtn("inventoryExport"),
+    `<div class="toolbar">
+       <input type="search" placeholder="${t("iv.search")}" oninput="state.iq=this.value;inventory()" value="${esc(state.iq)}">
+       <select onchange="state.iwh=this.value;state.iloc='';inventory()">${whOpts}</select>
+       <select onchange="state.iloc=this.value;inventory()">${locOpts}</select>
+       <select onchange="state.icat=this.value;inventory()">${catOpts}</select>
+       <select onchange="state.istate=this.value;inventory()">${stOpts}</select>
+       <button class="btn ghost sm" onclick="clearInvFilters()" ${fActive?"":"disabled"}>${t("iv.clear_filters")}</button>
+       <button class="btn ghost sm" onclick="selectAllFiltered()">${t("iv.select_all")}</button>
+       <span style="width:1px;height:24px;background:var(--line)"></span>
+       <select onchange="applyInvFilter(this.value)">${savedOpts}</select>
+       <button class="btn ghost sm" onclick="saveInvFilter()">${t("iv.save_filter")}</button>
+     </div>
+     ${activeBar}
+     ${bulk}
+     <div class="panel"><table><thead><tr><th style="width:34px"></th><th>${t("iv.product")}</th><th>${t("iv.wh")}</th><th>${t("iv.loc")}</th><th>${t("iv.qty")}</th><th>${t("iv.state")}</th><th>${t("iv.buy")}</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`);
+}
+function toggleExp(pid){const i=state.iexp.indexOf(pid);if(i>=0)state.iexp.splice(i,1);else state.iexp.push(pid);inventory();}
+function toggleSel(id,on){const i=state.isel.indexOf(id);if(on&&i<0)state.isel.push(id);if(!on&&i>=0)state.isel.splice(i,1);inventory();}
+function groupToggle(pid,on){db.inventory.filter(l=>l.productId===pid&&invMatch(l)).forEach(l=>{const i=state.isel.indexOf(l.id);if(on&&i<0)state.isel.push(l.id);if(!on&&i>=0)state.isel.splice(i,1);});inventory();}
+function selectAllFiltered(){state.isel=db.inventory.filter(invMatch).map(l=>l.id);state.iexp=[...new Set(db.inventory.filter(invMatch).map(l=>l.productId))];inventory();}
+function clearSel(){state.isel=[];inventory();}
+function clearInvFilters(){state.iq="";state.iwh="";state.iloc="";state.icat="";state.istate="";inventory();}
+// hromadné akcie
+function bulkMoveDlg(){modal(t("iv.move_title"),
+  `<div class="fld"><label>${t("iv.target_wh")}</label><select id="bm_wh" onchange="refreshLoc('bm_wh','bm_loc')">${db.warehouses.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("")}</select></div>
+   <div class="fld"><label>${t("iv.target_loc")}</label><select id="bm_loc"></select></div>`,
+  `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="applyBulkMove()">${t("iv.bulk_move")}</button>`);
+  refreshLoc("bm_wh","bm_loc");}
+function applyBulkMove(){const wh=Number($("#bm_wh").value),loc=$("#bm_loc").value;db.inventory.forEach(l=>{if(state.isel.includes(l.id)){l.warehouseId=wh;l.location=loc;}});save();state.isel=[];closeModal();inventory();}
+function bulkStateDlg(){modal(t("iv.state_title"),
+  `<div class="fld"><label>${t("iv.state")}</label><select id="bs_st"><option value="new">${t("iv.state_new")}</option><option value="used">${t("iv.state_used")}</option></select></div>
+   <div class="fld"><label>${t("iv.state_note")}</label><input id="bs_note" placeholder="${t("iv.state_note")}"></div>`,
+  `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="applyBulkState()">${t("iv.bulk_state")}</button>`);}
+function applyBulkState(){const st=$("#bs_st").value,note=$("#bs_note").value.trim();db.inventory.forEach(l=>{if(state.isel.includes(l.id)){l.state=st;if(note)l.stateNote=note;}});save();state.isel=[];closeModal();inventory();}
+function bulkCount(){db.inventory.forEach(l=>{if(state.isel.includes(l.id))l.counted=true;});save();state.isel=[];inventory();}
+// uložené filtre používateľa
+function saveInvFilter(){const name=prompt(t("iv.save_filter_prompt"));if(!name||!name.trim())return;db.invFilters=db.invFilters||{};db.invFilters[state.role]=db.invFilters[state.role]||[];const def={iq:state.iq,iwh:state.iwh,iloc:state.iloc,icat:state.icat,istate:state.istate};const ex=db.invFilters[state.role].find(f=>f.name===name.trim());if(ex)ex.def=def;else db.invFilters[state.role].push({name:name.trim(),def});save();inventory();}
+function applyInvFilter(name){if(!name)return;const f=((db.invFilters||{})[state.role]||[]).find(f=>f.name===name);if(!f)return;Object.assign(state,f.def);state.isel=[];inventory();}
+// príjem / úprava šarže
+function refreshLoc(whSel,locSel){const w=$("#"+whSel);if(!w)return;const box=$("#"+locSel);if(box)box.innerHTML=locOptionsHtml(w.value,"")||`<option value="">—</option>`;}
+function lotDialog(id){
+  const l=id?db.inventory.find(x=>x.id===id):{track:"unit",state:"new",buyCur:"CZK",quantity:1,warehouseId:db.warehouses[0].id};
+  modal(id?t("c.edit"):t("iv.receive_title"),
+   `<div class="note">${t("iv.receive_note")}</div>
+    <div class="fld"><label>${t("iv.product")}</label><select id="l_prod">${db.products.map(p=>`<option value="${p.id}" ${p.id===l.productId?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>
+    <div class="row2"><div class="fld"><label>${t("iv.wh")}</label><select id="l_wh" onchange="refreshLoc('l_wh','l_loc')">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===l.warehouseId?"selected":""}>${esc(w.name)}</option>`).join("")}</select></div>
+    <div class="fld"><label>${t("iv.loc")}</label><select id="l_loc"></select></div></div>
+    <div class="fld"><label>${t("iv.track")}</label><select id="l_track" onchange="toggleTrack(this.value)"><option value="unit" ${l.track!=="bulk"?"selected":""}>${t("iv.track_unit")}</option><option value="bulk" ${l.track==="bulk"?"selected":""}>${t("iv.track_bulk")}</option></select></div>
+    <div id="l_unitbox" class="row2" style="display:${l.track!=="bulk"?"grid":"none"}"><div class="fld"><label>${t("iv.serial")}</label><input id="l_sn" value="${esc(l.serial||"")}" placeholder="SN-…"></div><div class="fld"><label>${t("iv.qr")}</label><input id="l_qr" value="${esc(l.qr||"")}" placeholder="QR-…"></div></div>
+    <div id="l_bulkbox" class="row2" style="display:${l.track==="bulk"?"grid":"none"}"><div class="fld"><label>${t("iv.qty")}</label><input id="l_qty" type="number" min="0" value="${esc(l.quantity||0)}"></div><div class="fld"><label>${t("iv.qr")} (📦)</label><input id="l_qrb" value="${esc(l.qr||"")}" placeholder="QR-BOX-…"></div></div>
+    <div class="row2"><div class="fld"><label>${t("iv.state")}</label><select id="l_state"><option value="new" ${l.state!=="used"?"selected":""}>${t("iv.state_new")}</option><option value="used" ${l.state==="used"?"selected":""}>${t("iv.state_used")}</option></select></div>
+    <div class="fld"><label>${t("iv.state_note")}</label><input id="l_snote" value="${esc(l.stateNote||"")}"></div></div>
+    <div class="row2"><div class="fld"><label>Stav na sklade</label><select id="l_status"><option value="skladom" ${l.status!=="na_ceste"?"selected":""}>skladom</option><option value="na_ceste" ${l.status==="na_ceste"?"selected":""}>${t("iv.transit")}</option></select></div>
+    <div class="fld"><label>${t("iv.note")}</label><input id="l_note" value="${esc(l.note||"")}"></div></div>
+    <div class="row3"><div class="fld"><label>${t("iv.buy_price")}</label><input id="l_price" type="number" step="any" value="${esc(l.buyPrice)}"></div>
+    <div class="fld"><label>${t("iv.buy_date")}</label><input id="l_date" type="date" value="${esc(l.buyDate||"")}"></div>
+    <div class="fld"><label>${t("pf.currency")}</label><select id="l_cur">${curOptions(l.buyCur||"CZK")}</select></div></div>
+    <div class="fld"><label>${t("iv.invoice")}</label><input id="l_inv" value="${esc(l.invoice||"")}"></div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn green" onclick="saveLot(${id||0})">${id?t("c.save"):t("iv.receive")}</button>`);
+  refreshLoc("l_wh","l_loc");const ls=$("#l_loc");if(ls&&l.location){[...ls.options].forEach(o=>{if(o.value===l.location)ls.value=l.location;});}
+}
+function toggleTrack(v){$("#l_unitbox").style.display=v==="bulk"?"none":"grid";$("#l_bulkbox").style.display=v==="bulk"?"grid":"none";}
+function saveLot(id){
+  const track=$("#l_track").value;
+  const o={productId:Number($("#l_prod").value),warehouseId:Number($("#l_wh").value),location:$("#l_loc").value,
+    track,quantity:track==="bulk"?Number($("#l_qty").value||0):1,
+    serial:track==="bulk"?"":$("#l_sn").value.trim(),qr:track==="bulk"?$("#l_qrb").value.trim():$("#l_qr").value.trim(),
+    state:$("#l_state").value,stateNote:$("#l_snote").value.trim(),status:$("#l_status").value,note:$("#l_note").value.trim(),
+    buyPrice:$("#l_price").value===""?null:Number($("#l_price").value),buyCur:$("#l_cur").value,buyDate:$("#l_date").value,invoice:$("#l_inv").value.trim()};
+  if(id){Object.assign(db.inventory.find(x=>x.id===id),o);}else{o.id=db.seq.inventory++;o.counted=false;db.inventory.push(o);}
+  save();closeModal();inventory();
+}
+// rozmiestnenie skladu
+function manageLoc(){
+  const whId=state.iwh||db.warehouses[0].id;
+  modal(t("iv.loc_title"),
+   `<div class="fld"><label>${t("iv.wh")}</label><select id="ml_wh" onchange="manageLocRefresh(this.value)">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===Number(whId)?"selected":""}>${esc(w.name)}</option>`).join("")}</select></div>
+    <div id="ml_list"></div>
+    <button class="btn ghost sm" type="button" onclick="addLoc()">${t("iv.add_loc")}</button>`,
+   `<button class="btn" onclick="closeModal();inventory()">${t("c.close")}</button>`);
+  manageLocRefresh(whId);
+}
+function manageLocRefresh(whId){const w=db.warehouses.find(w=>w.id===Number(whId));const box=$("#ml_list");if(!box)return;
+  box.innerHTML=`<div class="kv" style="border:0"><div class="k" style="font-size:11px;text-transform:uppercase;color:var(--grey)">${t("iv.loc_code")}</div><div style="font-size:11px;text-transform:uppercase;color:var(--grey)">${t("iv.loc_desc")}</div></div>`+
+   (w.locations||[]).map((l,i)=>`<div class="comp-row"><input style="width:110px;flex:none" value="${esc(l.code)}" onchange="renameLoc(${w.id},${i},'code',this.value)"><input style="flex:1" value="${esc(l.desc||"")}" placeholder="${t("iv.loc_desc")}" onchange="renameLoc(${w.id},${i},'desc',this.value)"><button class="btn danger sm" type="button" onclick="delLoc(${w.id},${i})">×</button></div>`).join("")||`<div class="muted" style="font-size:12.5px;margin-bottom:8px">—</div>`;}
+function addLoc(){const whId=Number($("#ml_wh").value);const code=prompt(t("iv.loc_code")+":");if(!code||!code.trim())return;const desc=prompt(t("iv.loc_desc")+":")||"";const w=db.warehouses.find(w=>w.id===whId);w.locations=w.locations||[];w.locations.push({code:code.trim(),desc:desc.trim()});save();manageLocRefresh(whId);}
+function renameLoc(whId,i,field,val){const w=db.warehouses.find(w=>w.id===whId);const old=w.locations[i].code;w.locations[i][field]=val.trim();if(field==="code"&&old!==val.trim()){db.inventory.forEach(l=>{if(l.warehouseId===whId&&l.location===old)l.location=val.trim();});}save();}
+function delLoc(whId,i){const w=db.warehouses.find(w=>w.id===whId);const loc=w.locations[i];
+  const occ=db.inventory.filter(l=>l.warehouseId===whId&&l.location===loc.code).length;
+  if(occ>0){alert(t("iv.loc_occupied",{c:loc.code,n:occ}));return;}
+  if(!confirm(t("iv.loc_del_confirm",{c:loc.code})))return;
+  w.locations.splice(i,1);save();manageLocRefresh(whId);}
+
+// ---- PRÍJEM NA SKLAD (mobilný, jednoduchý) ----
+let rcSel=null;
+function receiveDialog(){rcSel=null;rcOpen();}
+function rcOpen(){
+  if(!rcSel){
+    modal(t("rc.title"),
+      `<div class="note">${t("rc.photo_note")}</div>
+       <div class="fld"><label>${t("iv.product")}</label><input id="r_q" placeholder="${t("rc.search")}" oninput="rSearch()"></div>
+       <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn ghost sm" type="button" onclick="rPhoto()">${t("rc.by_photo")}</button><button class="btn ghost sm" type="button" onclick="closeModal();editProduct()">${t("rc.new_product")}</button></div>
+       <div id="r_sug"></div>`,
+      `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button>`);
+    setTimeout(()=>{const q=$("#r_q");if(q){q.focus();rSearch();}},30);
+  }else{
+    const p=prod(rcSel);const isConsum=ancestors(p.categoryId).includes(1);const track=isConsum?"bulk":"unit";
+    modal(t("rc.title"),
+      `<div class="box" style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+         <div style="display:flex;align-items:center;gap:10px">${p.image?`<img class="thumb" src="${esc(p.image)}">`:`<span class="thumb"></span>`}<div><div class="muted" style="font-size:11px">${t("rc.chosen")}</div><b>${esc(p.name)}</b></div></div>
+         <button class="btn ghost sm" onclick="rReset()">${t("rc.change")}</button></div>
+       <div class="box"><h4>${t("rc.wh_pos")}</h4>
+         <div class="row2"><div class="fld" style="margin:0"><label>${t("iv.wh")}</label><select id="r_wh" onchange="refreshLoc('r_wh','r_loc')">${db.warehouses.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("")}</select></div>
+         <div class="fld" style="margin:0"><label>${t("iv.loc")}</label><select id="r_loc"></select></div></div></div>
+       <div class="fld"><label>${t("iv.track")}</label><select id="r_track" onchange="rTrack(this.value)"><option value="unit" ${track==="unit"?"selected":""}>${t("iv.track_unit")}</option><option value="bulk" ${track==="bulk"?"selected":""}>${t("iv.track_bulk")}</option></select></div>
+       <div id="r_unit" style="display:${track==="unit"?"block":"none"}"><div class="row2"><div class="fld"><label>${t("iv.serial")}</label><input id="r_sn" placeholder="SN-…"></div><div class="fld"><label>&nbsp;</label><button class="btn ghost" type="button" onclick="rSerialPhoto()" style="width:100%">${t("rc.serial_photo")}</button></div></div></div>
+       <div id="r_bulk" style="display:${track==="bulk"?"block":"none"}"><div class="fld"><label>${t("rc.qty")}</label><input id="r_qty" type="number" min="1" value="1"></div></div>
+       <div class="row2"><div class="fld"><label>${t("rc.state")}</label><select id="r_state"><option value="new">${t("iv.state_new")}</option><option value="used">${t("iv.state_used")}</option></select></div>
+       <div class="fld"><label>${t("rc.state_note")}</label><input id="r_snote" placeholder="${t("rc.state_note")}"></div></div>
+       <div class="fld"><label>${t("rc.doc")}</label><input id="r_doc" placeholder="FA-… / dodací list"></div>
+       <button class="btn ghost sm" type="button" onclick="rMorePhotos()">${t("rc.more_photos")}</button>
+       <div class="muted" style="font-size:11px;margin-top:6px">${t("dc.doc_future")}</div>`,
+      `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn green" onclick="rSave()">${t("rc.place")}</button>`);
+    refreshLoc("r_wh","r_loc");
+  }
+}
+function rSearch(){const q=($("#r_q")?$("#r_q").value:"").trim();const box=$("#r_sug");if(!box)return;
+  let list=db.products.slice();
+  if(q){list=db.products.map(p=>({p,s:jaccard(q,nameOfProduct(p))})).filter(o=>o.s>0||normKey(nameOfProduct(o.p)).includes(normKey(q))).sort((a,b)=>b.s-a.s).map(o=>o.p);}
+  list=list.slice(0,6);
+  box.innerHTML=list.length?list.map(p=>`<div class="dupitem"><span>${p.image?`<img class="thumb" src="${esc(p.image)}"> `:""}<b>${esc(p.name)}</b> <span class="muted">· ${esc(catPath(p.categoryId))}</span></span><button class="btn sm" onclick="rPick(${p.id})">${t("c.add")}</button></div>`).join(""):`<div class="muted" style="font-size:12.5px">${t("rc.no_match")}</div>`;
+}
+function rPick(id){rcSel=id;rcOpen();}
+function rReset(){rcSel=null;rcOpen();}
+function rPhoto(){alert(t("rc.photo_note"));window.open("https://lens.google.com/","_blank");}
+function rSerialPhoto(){alert(t("rc.serial_note"));}
+function rMorePhotos(){alert(t("rc.photos_added"));}
+function rTrack(v){$("#r_unit").style.display=v==="unit"?"block":"none";$("#r_bulk").style.display=v==="bulk"?"block":"none";}
+function rSave(){if(!rcSel)return;const track=$("#r_track").value;const doc=$("#r_doc")?$("#r_doc").value.trim():"";
+  const o={id:db.seq.inventory++,productId:rcSel,warehouseId:Number($("#r_wh").value),location:$("#r_loc").value,track,
+    quantity:track==="bulk"?Number($("#r_qty").value||1):1,serial:track==="unit"?$("#r_sn").value.trim():"",qr:"",
+    state:($("#r_state")?$("#r_state").value:"new"),stateNote:($("#r_snote")?$("#r_snote").value.trim():""),status:"skladom",note:"",buyPrice:null,buyCur:"CZK",buyDate:new Date().toISOString().slice(0,10),invoice:doc,counted:false};
+  db.inventory.push(o);
+  logMove({type:"prijem",productId:rcSel,lotId:o.id,qty:o.quantity,warehouseId:o.warehouseId,location:o.location,serial:o.serial||"",qr:o.qr||"",via:"fyzicky",doc,purpose:""});
+  save();closeModal();inventory();}
+// ---- VÝDAJ zo skladu ----
+function issueDialog(lotId){
+  const l=db.inventory.find(x=>x.id===lotId);if(!l)return;const p=prod(l.productId)||{};
+  const isBulk=l.track==="bulk";
+  modal(t("iss.title"),
+   `<div class="box" style="display:flex;align-items:center;gap:10px">${p.image?`<img class="thumb" src="${esc(p.image)}">`:`<span class="thumb"></span>`}<div><b>${esc(p.name)}</b><div class="muted" style="font-size:11.5px">${esc(whName(l.warehouseId))} · ${esc(l.location)} · ${t("iss.max",{n:l.quantity})}</div></div></div>
+    ${isBulk?`<div class="fld"><label>${t("iss.qty")}</label><input id="is_qty" type="number" min="1" max="${l.quantity}" value="1"></div>`:""}
+    <div class="fld"><label>${t("iss.via")}</label><select id="is_via"><option value="fyzicky">${t("iss.via_phys")}</option><option value="zasielkou">${t("iss.via_ship")}</option></select></div>
+    <div class="fld"><label>${t("iss.reason")}</label><input id="is_reason" placeholder="${t("iss.reason")}"></div>
+    <div class="fld"><label>${t("iss.doc")}</label><input id="is_doc" placeholder="OBJ-… / doklad"></div>
+    <div class="fld"><label>${t("iss.note")}</label><input id="is_note"></div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn danger" onclick="doIssue(${lotId})">${t("iss.confirm")}</button>`);
+}
+function doIssue(lotId){
+  const l=db.inventory.find(x=>x.id===lotId);if(!l)return;const p=prod(l.productId)||{};
+  let qty=l.track==="bulk"?Math.max(1,Math.min(Number($("#is_qty").value||1),l.quantity)):1;
+  const via=$("#is_via").value,reason=$("#is_reason").value.trim(),doc=$("#is_doc").value.trim(),note=$("#is_note").value.trim();
+  logMove({type:"vydaj",productId:l.productId,lotId:l.id,qty,warehouseId:l.warehouseId,location:l.location,serial:l.serial||"",qr:l.qr||"",via,doc,purpose:reason,note});
+  if(l.track==="bulk"){l.quantity-=qty;if(l.quantity<=0)db.inventory=db.inventory.filter(x=>x.id!==lotId);}
+  else db.inventory=db.inventory.filter(x=>x.id!==lotId);
+  save();closeModal();inventory();
+}
+// výdaj cez nájdenie položky (QR / SN / pozícia / názov)
+function issueFind(){
+  modal(t("if.title"),
+   `<div class="fld"><label>${t("iv.product")}</label><input id="if_q" placeholder="${t("if.search")}" oninput="ifSearch()"></div>
+    <button class="btn ghost sm" type="button" onclick="alert(t('rc.serial_note'))" style="margin-bottom:10px">${t("if.scan")}</button>
+    <div id="if_res"></div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button>`);
+  setTimeout(()=>{const q=$("#if_q");if(q){q.focus();ifSearch();}},30);
+}
+function ifSearch(){
+  const q=($("#if_q")?$("#if_q").value:"").trim().toLowerCase();const box=$("#if_res");if(!box)return;
+  let lots=db.inventory.slice();
+  if(q)lots=lots.filter(l=>{const p=prod(l.productId)||{};return((p.name||"")+" "+(l.qr||"")+" "+(l.serial||"")+" "+(l.location||"")+" "+whName(l.warehouseId)).toLowerCase().includes(q);});
+  lots=lots.slice(0,8);
+  box.innerHTML=lots.length?lots.map(l=>{const p=prod(l.productId)||{};return `<div class="dupitem"><span><b>${esc(p.name||"?")}</b> <span class="muted">· ${esc(whName(l.warehouseId))} ${esc(l.location)} ${l.qr?"· "+esc(l.qr):""} ${l.serial?"· "+esc(l.serial):""} · ${l.quantity} ks</span></span><button class="btn sm" onclick="closeModal();issueDialog(${l.id})">${t("if.pick")}</button></div>`;}).join(""):`<div class="muted" style="font-size:12.5px">${t("if.none")}</div>`;
+}
+// ---- DOKLADY (príjemky/výdajky) ----
+function docs(){
+  let list=db.movements.slice().sort((a,b)=>(b.at||"").localeCompare(a.at||""));
+  if(state.docType==="in")list=list.filter(m=>m.type==="prijem");
+  if(state.docType==="out")list=list.filter(m=>m.type==="vydaj");
+  if(state.docQ){const q=state.docQ.toLowerCase();list=list.filter(m=>{const p=prod(m.productId)||{};return((p.name||"")+" "+(m.doc||"")+" "+(m.purpose||"")).toLowerCase().includes(q);});}
+  const uName=id=>{const u=db.users.find(u=>u.id===id);return u?u.name:"—";};
+  const typeTag=tp=>tp==="prijem"?`<span class="tag g">${t("dc.type_in")}</span>`:tp==="vydaj"?`<span class="tag r">${t("dc.type_out")}</span>`:`<span class="tag b">${t("dc.type_corr")}</span>`;
+  const rowBg=tp=>tp==="prijem"?"#f2fbf5":tp==="vydaj"?"#fdf3f3":"#f3f6fd";
+  const rows=list.map(m=>{const p=prod(m.productId)||{};return `<tr style="background:${rowBg(m.type)};cursor:pointer" onclick="openMove(${m.id})">
+     <td>${esc((m.at||"").replace("T"," ").slice(0,16))}</td>
+     <td>${typeTag(m.type)}</td>
+     <td><b>${esc(p.name||"?")}</b></td>
+     <td>${m.type==="vydaj"?"−":"+"}${esc(m.qty)}</td>
+     <td>${esc(whName(m.warehouseId))} · ${esc(m.location||"—")}</td>
+     <td>${esc(uName(m.userId))}</td>
+     <td>${esc(m.doc||"—")}</td>
+     <td>${m.via?`<span class="pill">${esc(m.via==="zasielkou"?t("iss.via_ship"):t("iss.via_phys"))}</span>`:""}${m.purpose?`<div class="muted" style="font-size:11px">${esc(m.purpose)}</div>`:""}</td>
+   </tr>`;}).join("")||`<tr><td colspan="8"><div class="empty">${t("dc.none")}</div></td></tr>`;
+  const tabBtn=(v,lbl)=>`<button class="btn sm ${state.docType===v?"":"ghost"}" onclick="state.docType='${v}';docs()">${lbl}</button>`;
+  const canMove=can("inventory.move");
+  shell(t("dc.title"),t("dc.sub"),
+    (canMove?`<button class="btn green" onclick="receiveDialog()">${t("dc.receive")}</button> <button class="btn danger" onclick="issueFind()">${t("dc.issue")}</button> `:"")+exportBtn("docsExport"),
+    `<div class="toolbar">${tabBtn("",t("dc.all"))} ${tabBtn("in",t("dc.receipts"))} ${tabBtn("out",t("dc.issues"))}<input type="search" placeholder="${t("dc.search")}" oninput="state.docQ=this.value;docs()" value="${esc(state.docQ||'')}"></div>
+     <div class="note">${t("dm.open_hint")} · ${t("dc.doc_future")}</div>
+     <div class="panel"><table><thead><tr><th>${t("dc.date")}</th><th>${t("dc.type")}</th><th>${t("dc.product")}</th><th>${t("dc.qty")}</th><th>${t("dc.where")}</th><th>${t("dc.user")}</th><th>${t("dc.doc")}</th><th>${t("dc.via")} / ${t("dc.purpose")}</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+function moveSerial(m){if(m.serial)return m.serial;const l=db.inventory.find(x=>x.id===m.lotId);return l&&l.serial?l.serial:"";}
+function moveQr(m){if(m.qr)return m.qr;const l=db.inventory.find(x=>x.id===m.lotId);return l&&l.qr?l.qr:"";}
+function openMove(id){
+  const m=db.movements.find(x=>x.id===id);if(!m)return;const p=prod(m.productId)||{};
+  const uName=(db.users.find(u=>u.id===m.userId)||{}).name||"—";
+  const typeL=m.type==="prijem"?t("dc.type_in"):m.type==="vydaj"?t("dc.type_out"):t("dc.type_corr");
+  const kv=(k,v)=>v?`<div class="kv"><div class="k">${k}</div><div>${esc(v)}</div></div>`:"";
+  modal(t("dm.title"),
+   `<h3 style="margin-bottom:2px">${esc(p.name||"?")}</h3>
+    <div class="muted" style="font-size:12.5px;margin-bottom:12px">${typeL} · ${esc((m.at||"").replace("T"," ").slice(0,16))}</div>
+    <div class="box">
+      ${kv(t("dm.type"),typeL)}
+      ${kv(t("dm.qty"),(m.type==="vydaj"?"−":"+")+m.qty)}
+      ${kv(t("dm.serial"),moveSerial(m)||"—")}
+      ${kv(t("dm.qr"),moveQr(m)||"—")}
+      ${kv(t("dm.wh"),whName(m.warehouseId)+" · "+(m.location||"—"))}
+      ${kv(t("dm.user"),uName)}
+      ${kv(t("dm.doc"),m.doc)}
+      ${kv(t("dm.purpose"),m.purpose)}
+      ${kv(t("dm.via"),m.via?(m.via==="zasielkou"?t("iss.via_ship"):t("iss.via_phys")):"")}
+      ${kv(t("dm.note"),m.note)}
+      ${kv(t("dm.date"),(m.at||"").replace("T"," ").slice(0,19))}
+    </div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.close")}</button>`);
+}
+// ---- INVENTÚRA (cyklus) ----
+function stockDue(p){if(p.stockCycle==="none")return false;if(!p.lastCountAt)return true;const days=(Date.now()-new Date(p.lastCountAt).getTime())/86400000;return p.stockCycle==="monthly"?days>=30:days>=365;}
+function stocktake(){
+  let list=db.products.filter(p=>p.stockCycle!=="none");
+  if(state.stOnlyDue)list=list.filter(stockDue);
+  const cyc={monthly:t("st.monthly"),yearly:t("st.yearly"),none:t("st.none")};
+  const rows=list.map(p=>{
+    const total=db.inventory.filter(l=>l.productId===p.id).reduce((s,l)=>s+(Number(l.quantity)||0),0);
+    const due=stockDue(p);
+    return `<tr>
+     <td><b>${esc(p.name)}</b><div class="muted" style="font-size:11.5px">${esc(catPath(p.categoryId))}</div></td>
+     <td><select onchange="setCycle(${p.id},this.value)">${["monthly","yearly","none"].map(c=>`<option value="${c}" ${p.stockCycle===c?"selected":""}>${cyc[c]}</option>`).join("")}</select></td>
+     <td>${total}</td>
+     <td>${p.lastCountAt?esc(p.lastCountAt):`<span class="muted">${t("st.never")}</span>`}</td>
+     <td>${due?`<span class="tag r">${t("st.overdue")}</span>`:`<span class="tag g">${t("st.ok")}</span>`}</td>
+     <td style="text-align:right"><button class="btn sm" onclick="countDialog(${p.id})">${t("st.count")}</button></td>
+   </tr>`;}).join("")||`<tr><td colspan="6"><div class="empty">${t("c.none")}</div></td></tr>`;
+  shell(t("st.title"),t("st.sub"),"",
+    `<div class="toolbar"><label class="chk"><input type="checkbox" ${state.stOnlyDue?"checked":""} onchange="state.stOnlyDue=this.checked;stocktake()"> ${t("st.only_due")}</label></div>
+     <div class="panel"><table><thead><tr><th>${t("st.product")}</th><th>${t("st.cycle")}</th><th>${t("st.total")}</th><th>${t("st.last")}</th><th>${t("st.status")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+function setCycle(pid,c){prod(pid).stockCycle=c;save();stocktake();}
+function countDialog(pid){
+  const p=prod(pid);const lots=db.inventory.filter(l=>l.productId===pid);
+  modal(t("st.count_title")+" — "+esc(p.name),
+   (lots.length?lots.map(l=>`<div class="comp-row"><span style="flex:1;font-size:12.5px">${esc(whName(l.warehouseId))} · ${esc(l.location)} ${l.serial?"· "+esc(l.serial):""} <span class="muted">(${t("st.total")}: ${l.quantity})</span></span><input type="number" min="0" style="width:90px" id="cnt_${l.id}" value="${l.quantity}"></div>`).join(""):`<div class="muted">${t("c.none")}</div>`),
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="saveCount(${pid})">${t("st.save")}</button>`);
+}
+function saveCount(pid){
+  const p=prod(pid);const lots=db.inventory.filter(l=>l.productId===pid);let corr=0;
+  lots.forEach(l=>{const el=$("#cnt_"+l.id);if(!el)return;const nq=Number(el.value);if(!isNaN(nq)&&nq!==l.quantity){const diff=nq-l.quantity;logMove({type:"korekcia",productId:pid,lotId:l.id,qty:diff,warehouseId:l.warehouseId,location:l.location,via:"",doc:"inventúra",purpose:"korekcia stavu"});l.quantity=nq;corr++;}l.counted=true;});
+  p.lastCountAt=new Date().toISOString().slice(0,10);
+  save();closeModal();alert(t("st.done",{n:corr}));stocktake();}
+
+// ---- INVENTÁR (firemný majetok) ----
+function assetName(a){return a.name||(prod(a.productId)?prod(a.productId).name:"?");}
+function assetImg(a){return prod(a.productId)?prod(a.productId).image:"";}
+const asStateTag={new:"g",used:"b",broken:"r"};
+function assets(){
+  const canEdit=can("product.edit");
+  let list=db.assets.slice();
+  if(state.aq){const q=state.aq.toLowerCase();list=list.filter(a=>(assetName(a)+" "+(a.assigned||"")+" "+(a.serial||"")+" "+(a.location||"")).toLowerCase().includes(q));}
+  const stLbl=s=>({new:t("as.state_new"),used:t("as.state_used"),broken:t("as.state_broken")}[s]||s);
+  const rows=list.map(a=>{const img=assetImg(a);const thumb=img?`<img class="thumb" src="${esc(img)}" data-full="${esc(img)}" data-cap="${esc(assetName(a))}">`:`<span class="thumb"></span>`;return `<tr>
+     <td>${thumb}</td>
+     <td><b>${esc(assetName(a))}</b>${a.note?`<div class="muted" style="font-size:11.5px">${esc(a.note)}</div>`:""}</td>
+     <td>${esc(a.assigned||"—")}${a.location?`<div class="muted" style="font-size:11px">${esc(a.location)}</div>`:""}</td>
+     <td>${esc(a.serial||"—")}</td>
+     <td>${esc(a.acquired||"—")}</td>
+     <td><span class="tag ${asStateTag[a.state]||'gr'}">${esc(stLbl(a.state))}</span></td>
+     <td style="text-align:right;white-space:nowrap">${canEdit?`<button class="btn ghost sm" onclick="assetDialog(${a.id})">${t("c.edit")}</button> <button class="btn danger sm" onclick="delAsset(${a.id})">${t("c.delete")}</button>`:""}</td>
+   </tr>`;}).join("")||`<tr><td colspan="7"><div class="empty">${t("c.none")}</div></td></tr>`;
+  shell(t("as.title"),t("as.sub"),(canEdit?`<button class="btn" onclick="assetDialog()">${t("as.new")}</button> `:"")+exportBtn("assetsExport"),
+    `<div class="toolbar"><input type="search" placeholder="${t("as.search")}" oninput="state.aq=this.value;assets()" value="${esc(state.aq)}"></div>
+     <div class="panel"><table><thead><tr><th></th><th>${t("as.col_item")}</th><th>${t("as.col_assigned")}</th><th>${t("as.col_serial")}</th><th>${t("as.col_acquired")}</th><th>${t("as.col_state")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+function assetDialog(id){
+  const a=id?db.assets.find(x=>x.id===id):{state:"used",productId:null};
+  const people=[...db.users.map(u=>u.name),...db.warehouses.map(w=>w.name)];
+  modal(id?t("c.edit"):t("as.new"),
+   `<div class="fld"><label>${t("as.item")}</label><select id="a_prod" onchange="if(this.value)document.getElementById('a_name').value=''"><option value="">${t("as.item_none")}</option>${db.products.map(p=>`<option value="${p.id}" ${p.id===a.productId?"selected":""}>${esc(p.name)}</option>`).join("")}</select></div>
+    <div class="fld"><label>${t("as.name")}</label><input id="a_name" value="${esc(a.name||"")}"></div>
+    <div class="row2"><div class="fld"><label>${t("as.assigned")}</label><input id="a_assigned" list="a_people" value="${esc(a.assigned||"")}"><datalist id="a_people">${people.map(n=>`<option value="${esc(n)}">`).join("")}</datalist></div>
+    <div class="fld"><label>${t("as.location")}</label><input id="a_loc" value="${esc(a.location||"")}"></div></div>
+    <div class="row2"><div class="fld"><label>${t("as.serial")}</label><input id="a_sn" value="${esc(a.serial||"")}"></div>
+    <div class="fld"><label>${t("as.acquired")}</label><input id="a_acq" type="date" value="${esc(a.acquired||"")}"></div></div>
+    <div class="fld"><label>${t("as.state")}</label><select id="a_state"><option value="new" ${a.state==="new"?"selected":""}>${t("as.state_new")}</option><option value="used" ${a.state!=="new"&&a.state!=="broken"?"selected":""}>${t("as.state_used")}</option><option value="broken" ${a.state==="broken"?"selected":""}>${t("as.state_broken")}</option></select></div>
+    <div class="fld"><label>${t("as.note")}</label><input id="a_note" value="${esc(a.note||"")}"></div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="saveAsset(${id||0})">${t("c.save")}</button>`);
+}
+function saveAsset(id){
+  const pv=$("#a_prod").value;
+  const o={productId:pv?Number(pv):null,name:$("#a_name").value.trim(),assigned:$("#a_assigned").value.trim(),location:$("#a_loc").value.trim(),serial:$("#a_sn").value.trim(),acquired:$("#a_acq").value,state:$("#a_state").value,note:$("#a_note").value.trim()};
+  if(!o.productId&&!o.name){alert(t("as.name"));return;}
+  if(id){Object.assign(db.assets.find(x=>x.id===id),o);}else{o.id=db.seq.asset++;db.assets.push(o);}
+  save();closeModal();assets();
+}
+function delAsset(id){if(confirm(t("c.delete")+"?")){db.assets=db.assets.filter(a=>a.id!==id);save();assets();}}
+
+// ---- TLAČ QR ----
+function qrImg(data,px){return `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=0&data=${encodeURIComponent(data)}`;}
+function qrprint(){
+  const prodOpts=db.products.map(p=>`<option value="${p.id}">${esc(p.name)}${p.sku?" ("+esc(p.sku)+")":""}</option>`).join("");
+  const compOpts=`<option value="-1">${t("qr.company_none")}</option>`+db.companies.map((c,i)=>`<option value="${i}">${esc(c.name)}</option>`).join("");
+  shell(t("qr.title"),t("qr.sub"),"",
+   `<div id="qr_controls" class="panel noprint" style="padding:14px">
+     <div class="row3">
+       <div class="fld"><label>${t("qr.mode")}</label><select id="qr_mode" onchange="qrModeUI()"><option value="product">${t("qr.mode_product")}</option><option value="custom">${t("qr.mode_custom")}</option><option value="web">${t("qr.mode_web")}</option></select></div>
+       <div class="fld" id="qr_prodf"><label>${t("qr.product")}</label><select id="qr_prod">${prodOpts}</select></div>
+       <div class="fld" id="qr_textf" style="display:none"><label>${t("qr.text")}</label><input id="qr_text" placeholder="napr. QR-000123"></div>
+     </div>
+     <div class="row3">
+       <div class="fld"><label>${t("qr.company")}</label><select id="qr_comp">${compOpts}</select></div>
+       <div class="fld"><label>${t("qr.size")}</label><select id="qr_size"><option value="2">2 × 2 cm</option><option value="3" selected>3 × 3 cm</option></select></div>
+       <div class="row3" style="gap:10px"><div class="fld"><label>${t("qr.cols")}</label><input id="qr_cols" type="number" min="1" max="12" value="4"></div>
+       <div class="fld"><label>${t("qr.codes")}</label><input id="qr_codes" type="number" min="1" max="200" value="4"></div>
+       <div class="fld"><label>${t("qr.dupes")}</label><input id="qr_dupes" type="number" min="1" max="20" value="3"></div></div>
+     </div>
+     <div class="row3"><div class="fld"><label>&nbsp;</label><div class="chk"><input type="checkbox" id="qr_seq"><label style="margin:0">${t("qr.seq")}</label></div></div>
+       <div class="fld"><label>${t("qr.seq_prefix")}</label><input id="qr_prefix" value="QR-"></div>
+       <div class="fld"><label>&nbsp;</label><div class="chk"><input type="checkbox" id="qr_cut" checked><label style="margin:0">${t("qr.cut")}</label></div></div></div>
+     <div class="note" id="qr_webhint" style="display:none">${t("qr.web_hint")}</div>
+     <div class="note">${t("qr.online_note")}</div>
+     <button class="btn" onclick="qrGenerate()">${t("qr.generate")}</button>
+     <button class="btn green" onclick="window.print()">${t("qr.print")}</button>
+   </div>
+   <div id="qr_sheet"></div>`);
+  qrModeUI();qrGenerate();
+}
+function qrModeUI(){const m=$("#qr_mode").value;$("#qr_prodf").style.display=(m==="product")?"block":"none";$("#qr_textf").style.display=(m==="custom")?"block":"none";$("#qr_webhint").style.display=(m==="web")?"block":"none";}
+function qrGenerate(){
+  const m=$("#qr_mode").value;const compIdx=Number($("#qr_comp").value);const comp=compIdx>=0?db.companies[compIdx]:null;
+  const sizeCm=Number($("#qr_size").value);const cols=Math.max(1,Number($("#qr_cols").value)||4);
+  const seq=$("#qr_seq")&&$("#qr_seq").checked;const prefix=($("#qr_prefix")&&$("#qr_prefix").value||"QR-").trim();
+  const codesN=Math.max(1,Number($("#qr_codes").value)||1);const dupes=Math.max(1,Number($("#qr_dupes").value)||3);
+  const cut=$("#qr_cut")&&$("#qr_cut").checked;
+  const cellW=sizeCm*10; // mm
+  const mkData=(code)=>{if(m==="web")return (comp?comp.web:"https://oneminers.com")+"/i/"+code;if(comp)return comp.web+"/p/"+code;return code;};
+  let baseCode="";
+  if(m==="product"){const p=prod(Number($("#qr_prod").value))||{};baseCode="P"+(p.id||0);}
+  else if(m==="custom"){baseCode=($("#qr_text").value||"000").trim();}
+  else baseCode=String(Date.now()).slice(-6);
+  const cells=[];
+  for(let c=0;c<codesN;c++){
+    const code=seq?(prefix+baseCode+"-"+String(c+1).padStart(3,"0")):(prefix+baseCode);
+    const data=mkData(code);
+    const label=(m==="product")?((prod(Number($("#qr_prod").value))||{}).name||code)+(seq?" · "+code:""):(m==="web"?data:code);
+    for(let d=0;d<dupes;d++){ // vždy N rovnakých na kód
+      cells.push(`<div class="qrcell${cut?" cut":""}" style="width:${cellW}mm"><img src="${qrImg(data,300)}" style="width:${cellW}mm;height:${cellW}mm"><div class="qlbl">${comp?"<b>"+esc(comp.name)+"</b><br>":""}${esc(label)}</div></div>`);
+    }
+  }
+  $("#qr_sheet").innerHTML=`<div class="qrsheet${cut?" cut":""}" style="max-width:${cols*(cellW+6)+14}mm">${cells.join("")}</div>`;
+}
+
+// ---- SHIPMENTS ----
+const INCOTERMS=[["EXW","Ex Works — kupujúci si všetko vyzdvihne a znáša náklady/riziko od skladu predávajúceho."],["FCA","Free Carrier — predávajúci odovzdá tovar dopravcovi určenému kupujúcim."],["CPT","Carriage Paid To — predávajúci platí prepravu do miesta určenia, riziko prechádza skôr."],["CIP","Carriage & Insurance Paid — ako CPT + predávajúci platí poistenie."],["DAP","Delivered at Place — dodané na miesto; clo a dovozné poplatky platí kupujúci."],["DPU","Delivered at Place Unloaded — dodané a vyložené v mieste určenia."],["DDP","Delivered Duty Paid — predávajúci platí všetko vrátane cla (kupujúci nič)."],["FOB","Free On Board — námorná; riziko prechádza pri naložení na loď."],["CIF","Cost, Insurance & Freight — námorná; predávajúci platí prepravu a poistenie."]];
+function shDirLabel(d){return d==="inbound"?t("sh.to_us"):d==="dropship"?t("sh.drop"):t("sh.from_us");}
+function shPayLabel(v){return {proforma:t("sh.pay_proforma"),deposit:t("sh.pay_deposit"),cod:t("sh.pay_cod")}[v]||"—";}
+function shDirColor(d){return d==="inbound"?"#3b6fd4":d==="dropship"?"#7a4fc0":"#e08a1e";}
+function shClosed(st){return ["Doručené","Doručeno","Delivered","Vrátené","Vráceno","Returned"].includes(st);}
+function shipIncoterms(){modal(t("sh.incoterm_title"),`<div class="box">${INCOTERMS.map(i=>`<div class="kv"><div class="k"><b>${i[0]}</b></div><div>${esc(i[1])}</div></div>`).join("")}</div>`,`<button class="btn ghost" onclick="closeModal()">${t("c.close")}</button>`);}
+function shipments(){
+  const canEdit=can("shipment.edit");let list=db.shipments.slice();
+  if(state.shDir)list=list.filter(s=>s.direction===state.shDir);
+  if(state.shPaid)list=list.filter(s=>state.shPaid==="paid"?s.paid:!s.paid);
+  if(state.shOpen)list=list.filter(s=>!shClosed(s.status));
+  if(state.q){const q=state.q.toLowerCase();list=list.filter(s=>((s.tracking||"")+" "+(s.carrier||"")+" "+(s.to||"")+" "+(s.from||"")+" "+(s.sender||"")+" "+(s.ourOrder||"")+" "+(s.jds||"")+" "+(s.awb||"")).toLowerCase().includes(q));}
+  const rows=list.map(s=>{
+    const dcol=shDirColor(s.direction);
+    const dirTag=`<span class="tag ${s.direction==="inbound"?"b":s.direction==="dropship"?"p":"o"}">${shDirLabel(s.direction)}</span>`;
+    const custom=(s.customs||s.nonEu)?`<span class="tag r" title="Incoterm: ${esc(s.incoterm||"—")} · JDS: ${esc(s.jds||"—")} · AWB: ${esc(s.awb||"—")} · ${t("sh.customs_value")}: ${esc(s.customsValue||0)} · ${t("sh.duty")}: ${esc(s.duty||0)} · ${t("sh.proc_fee")}: ${esc(s.procFee||0)}">🛃 ${esc(s.incoterm||"colné")}</span>`:(s.incoterm?`<span class="pill">${esc(s.incoterm)}</span>`:"");
+    const stCat=shClosed(s.status)?`<span class="tag g">${t("sh.closed")}</span>`:`<span class="tag o">${t("sh.open")}</span>`;
+    let pay;
+    if(s.direction==="inbound")pay=`${s.paid?'<span class="tag g">'+t("sh.paid")+'</span>':'<span class="tag r">'+t("sh.unpaid")+'</span>'}<div class="muted" style="font-size:11px">${esc(s.invoice||t("sh.nofaktura"))}${s.paidWhere?" · "+esc(s.paidWhere):""}</div>`;
+    else pay=`<span class="pill">${esc(shPayLabel(s.custPay))}</span>${s.shipCost?`<div class="muted" style="font-size:11px">${t("sh.ship_cost")}: ${money(s.shipCost,s.shipCostCur)}</div>`:""}`;
+    return `<tr style="border-left:4px solid ${dcol}">
+     <td><b>${esc(s.tracking)}</b><div class="muted" style="font-size:11.5px">${esc(s.carrier)} · ${dirTag} ${custom}</div>${s.ourOrder?`<div class="muted" style="font-size:11px">${t("sh.our_order")}: ${esc(s.ourOrder)}</div>`:""}</td>
+     <td>${esc(s.from)} → ${esc(s.to)}${s.sender?`<div class="muted" style="font-size:11px">${esc(s.sender)}</div>`:""}${s.contents?`<div class="muted" style="font-size:11px">📦 ${esc(s.contents)}</div>`:""}</td>
+     <td><span class="tag ${shipTag(s.status)}">${esc(s.status)}</span><div style="margin-top:3px">${stCat}</div></td>
+     <td>${esc(s.exp||"—")}</td>
+     <td>${pay}</td>
+     <td style="text-align:right;white-space:nowrap">${(canEdit&&s.direction==="inbound")?`<button class="btn green sm" onclick="shipReceive(${s.id})">${t("sh.assign_qr")}</button> `:""}${canEdit?`<button class="btn ghost sm" onclick="editShip(${s.id})">${t("c.edit")}</button>`:''}</td></tr>`;}).join("")||`<tr><td colspan="6"><div class="empty">${t("c.none")}</div></td></tr>`;
+  const dirOpts=`<option value="">${t("sh.filter_dir")}</option>`+["inbound","outbound","dropship"].map(d=>`<option value="${d}" ${state.shDir===d?"selected":""}>${shDirLabel(d)}</option>`).join("");
+  const paidOpts=`<option value="">${t("sh.filter_paid")}</option><option value="paid" ${state.shPaid==="paid"?"selected":""}>${t("sh.paid")}</option><option value="unpaid" ${state.shPaid==="unpaid"?"selected":""}>${t("sh.unpaid")}</option>`;
+  shell(t("sh.title"),t("sh.sub"),
+    (canEdit?`<button class="btn" onclick="quickShip()">${t("sh.quick")}</button> <button class="btn ghost" onclick="editShip()">${t("sh.new")}</button> `:"")+exportBtn("shipmentsExport"),
+    `<div class="toolbar"><input type="search" placeholder="${t("sh.search")}" oninput="state.q=this.value;shipments()" value="${esc(state.q)}"><select onchange="state.shDir=this.value;shipments()">${dirOpts}</select><select onchange="state.shPaid=this.value;shipments()">${paidOpts}</select><label class="chk"><input type="checkbox" ${state.shOpen?"checked":""} onchange="state.shOpen=this.checked;shipments()"> ${t("sh.filter_open")}</label></div>
+     <div class="panel"><table><thead><tr><th>${t("dash.tracking")}</th><th>${t("sh.col_route")}</th><th>${t("dash.status")} / ${t("sh.st_cat")}</th><th>${t("sh.col_exp")}</th><th>${t("sh.col_pay")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+// rýchle založenie zásielky cez tracking number (appka dohľadá údaje)
+function quickShip(){
+  modal(t("sh.quick_title"),
+   `<div class="note">${t("sh.quick_note")}</div>
+    <div class="fld"><label>${t("sh.quick_tn")}</label><input id="q_tn" placeholder="napr. 1Z999AA10123456784"></div>
+    <div style="display:flex;gap:8px"><button class="btn ghost sm" type="button" onclick="alert(t('sh.quick_note'))">${t("sh.quick_photo")}</button></div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn green" onclick="quickFetch()">${t("sh.quick_fetch")}</button>`);
+}
+function quickFetch(){
+  const tn=($("#q_tn").value||"").trim();if(!tn){alert(t("sh.quick_tn"));return;}
+  // "dohľadanie" z prefixu (prototyp)
+  const up=tn.toUpperCase();let carrier="?";
+  if(up.startsWith("1Z"))carrier="UPS";else if(up.startsWith("DHL")||/^\d{10}$/.test(up))carrier="DHL";else if(up.startsWith("GLS"))carrier="GLS";else if(up.startsWith("PPL")||up.startsWith("CZ"))carrier="PPL";else if(up.startsWith("Z"))carrier="Packeta";else carrier="DPD";
+  const status="V doprave";
+  const id=db.seq.shipment++;
+  db.shipments.push({id,tracking:tn,carrier,direction:"inbound",status,from:"",to:"Sklad 1 — Praha",sender:"",contents:"",ourOrder:"",exp:"",paid:false,paidWhere:"",invoice:"",payAmt:null,payCur:"CZK",cryptoTx:"",custPay:"",shipCost:null,shipCostCur:"CZK",customs:false,nonEu:false,incoterm:"",jds:"",awb:"",customsValue:null,duty:null,procFee:null});
+  save();closeModal();alert(t("sh.quick_found",{c:carrier,s:status}));editShip(id);
+}
+function shipReceive(id){
+  const s=db.shipments.find(x=>x.id===id);if(!s)return;
+  // ak má zásielka položky, založ ich do skladu s QR; inak otvor ručný príjem
+  if(s.items&&s.items.length){
+    const wh=(db.warehouses.find(w=>w.name===s.to)||db.warehouses[0]).id;
+    let created=0;
+    s.items.forEach(it=>{
+      const qr="QR-"+String(Date.now()).slice(-6)+"-"+(created+1);
+      const unit=it.qty===1;
+      const lot={id:db.seq.inventory++,productId:it.productId,warehouseId:wh,location:"—",status:"skladom",track:unit?"unit":"bulk",quantity:it.qty,serial:"",qr,state:"new",stateNote:"",note:"",expected:"",shipmentId:s.id,buyPrice:null,buyCur:"CZK",buyDate:new Date().toISOString().slice(0,10),invoice:s.invoice||"",counted:false};
+      db.inventory.push(lot);
+      logMove({type:"prijem",productId:it.productId,lotId:lot.id,qty:it.qty,warehouseId:wh,location:"—",serial:"",qr,via:"zasielkou",doc:s.invoice||s.tracking,purpose:""});
+      created++;
+    });
+    // odstráň prípadné pending "doručuje sa" položky tejto zásielky
+    db.inventory=db.inventory.filter(l=>!(l.shipmentId===s.id&&l.note==="doručuje sa"));
+    s.status="Doručené";save();alert(t("sh.receive_items_ok",{n:created}));closeModal&&closeModal();state.view="inventory";document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active",a.dataset.v==="inventory"));inventory();
+  } else {
+    s.status="Doručené";save();alert(t("sh.received_ok"));closeModal&&closeModal();receiveDialog();
+  }
+}
+function editShip(id){
+  const s=id?db.shipments.find(x=>x.id===id):{direction:"inbound",paid:false,payCur:"CZK",shipCostCur:"CZK",nonEu:false,custPay:""};
+  const dir=s.direction||"inbound";
+  shipItems=(s.items&&s.items.length)?JSON.parse(JSON.stringify(s.items)):[];
+  modal(id?t("c.edit"):t("sh.new"),
+   `<div class="note">${t("sh.status_auto")}</div>
+    <div class="box"><h4>${t("sh.sec_general")}</h4>
+      <div class="row2"><div class="fld" style="margin:0"><label>${t("dash.tracking")}</label><input id="s_tr" value="${esc(s.tracking||"")}"></div><div class="fld" style="margin:0"><label>${t("sh.carrier")}</label><input id="s_ca" value="${esc(s.carrier||"")}"></div></div>
+      <div class="row2"><div class="fld"><label>${t("sh.dir")}</label><select id="s_dir" onchange="shDirToggle(this.value)"><option value="inbound" ${dir==="inbound"?"selected":""}>${t("sh.dir_in")}</option><option value="outbound" ${dir==="outbound"?"selected":""}>${t("sh.dir_out")}</option><option value="dropship" ${dir==="dropship"?"selected":""}>${t("sh.dir_drop")}</option></select></div><div class="fld"><label>${t("dash.status")}</label><input id="s_st" value="${esc(s.status||"")}"></div></div>
+      <div class="row2"><div class="fld"><label>${t("sh.from")}</label><input id="s_from" value="${esc(s.from||"")}"></div><div class="fld"><label>${t("sh.to")}</label><input id="s_to" value="${esc(s.to||"")}"></div></div>
+      <div class="fld" id="s_senderf"><label>${t("sh.sender")}</label><input id="s_sender" value="${esc(s.sender||"")}"></div>
+      <div class="fld" id="s_orderf"><label>${t("sh.our_order")}</label><input id="s_order" value="${esc(s.ourOrder||"")}"></div>
+      <div class="fld"><label>${t("sh.exp")}</label><input id="s_exp" type="date" value="${esc(s.exp||"")}"></div>
+      <div class="fld"><label>${t("sh.items")}</label><div class="note" style="margin-bottom:8px">${t("sh.items_hint")}</div><div id="s_items"></div><button class="btn ghost sm" type="button" onclick="shipAddItem()">${t("sh.add_item")}</button></div>
+    </div>
+    <div class="box"><h4>${t("sh.sec_pay")}</h4>
+      <div id="s_payin"><div class="chk" style="margin-bottom:8px"><input type="checkbox" id="s_paid" ${s.paid?"checked":""}><label style="margin:0">${t("sh.inbound_paid")}</label></div>
+        <div class="row2"><div class="fld"><label>${t("sh.inv")}</label><input id="s_inv" value="${esc(s.invoice||"")}"></div><div class="fld"><label>${t("sh.paid_where")}</label><input id="s_paidwhere" value="${esc(s.paidWhere||"")}"></div></div></div>
+      <div id="s_payout"><div class="fld"><label>${t("sh.cust_pay")}</label><select id="s_custpay"><option value="">${t("sh.pay_none")}</option><option value="proforma" ${s.custPay==="proforma"?"selected":""}>${t("sh.pay_proforma")}</option><option value="deposit" ${s.custPay==="deposit"?"selected":""}>${t("sh.pay_deposit")}</option><option value="cod" ${s.custPay==="cod"?"selected":""}>${t("sh.pay_cod")}</option></select></div>
+        <div class="row2"><div class="fld"><label>${t("sh.ship_cost")}</label><input id="s_shipcost" type="number" step="any" value="${esc(s.shipCost)}"></div><div class="fld"><label>${t("sh.cur")}</label><select id="s_shipcur">${curOptions(s.shipCostCur||"CZK")}</select></div></div></div>
+      <div class="row2"><div class="fld"><label>${t("sh.amt")}</label><input id="s_amt" type="number" step="any" value="${esc(s.payAmt)}"></div><div class="fld"><label>${t("sh.cur")}</label><select id="s_cur">${curOptions(s.payCur||"CZK")}</select></div></div>
+    </div>
+    <div class="box"><h4>${t("sh.sec_customs")}</h4>
+      <div class="row2"><div class="fld"><label>${t("sh.incoterm")} <span class="link" style="font-size:11px" onclick="shipIncoterms()">${t("sh.incoterm_legend")}</span></label><select id="s_incoterm"><option value=""></option>${INCOTERMS.map(i=>`<option value="${i[0]}" ${s.incoterm===i[0]?"selected":""}>${i[0]}</option>`).join("")}</select></div>
+      <div class="fld"><label>&nbsp;</label><div class="chk"><input type="checkbox" id="s_customs" ${(s.customs||s.nonEu)?"checked":""} onchange="document.getElementById('s_customsbox').style.display=this.checked?'block':'none'"><label style="margin:0">${t("sh.customs_toggle")}</label></div></div>
+      <div id="s_customsbox" style="display:${(s.customs||s.nonEu)?"block":"none"}">
+        <div class="row2"><div class="fld"><label>${t("sh.jds")}</label><input id="s_jds" value="${esc(s.jds||"")}" placeholder="26CZ600000CABG4DR4"></div><div class="fld"><label>${t("sh.awb")}</label><input id="s_awb" value="${esc(s.awb||"")}"></div></div>
+        <div class="row3"><div class="fld"><label>${t("sh.customs_value")}</label><input id="s_cval" type="number" step="any" value="${esc(s.customsValue)}"></div><div class="fld"><label>${t("sh.duty")}</label><input id="s_duty" type="number" step="any" value="${esc(s.duty)}"></div><div class="fld"><label>${t("sh.proc_fee")}</label><input id="s_pfee" type="number" step="any" value="${esc(s.procFee)}"></div></div>
+      </div>
+    </div>`,
+   `<button class="btn ghost" onclick="closeModal()">${t("c.cancel")}</button><button class="btn" onclick="saveShip(${id||0})">${t("c.save")}</button>`);
+  shDirToggle(dir);renderShipItems();
+}
+let shipItems=[];
+function renderShipItems(){const box=$("#s_items");if(!box)return;box.innerHTML=shipItems.map((it,i)=>`<div class="comp-row"><select onchange="shipItems[${i}].productId=Number(this.value)">${db.products.map(p=>`<option value="${p.id}" ${p.id===it.productId?"selected":""}>${esc(p.name)}</option>`).join("")}</select><input type="number" min="1" value="${it.qty}" onchange="shipItems[${i}].qty=Number(this.value)"><button class="btn danger sm" type="button" onclick="shipRmItem(${i})">×</button></div>`).join("")||`<div class="muted" style="font-size:12px;margin-bottom:6px">—</div>`;}
+function shipAddItem(){shipItems.push({productId:db.products[0].id,qty:1});renderShipItems();}
+function shipRmItem(i){shipItems.splice(i,1);renderShipItems();}
+function shDirToggle(dir){const inb=dir==="inbound";const pin=$("#s_payin"),pout=$("#s_payout"),sf=$("#s_senderf"),of=$("#s_orderf");if(pin)pin.style.display=inb?"block":"none";if(pout)pout.style.display=inb?"none":"block";if(sf)sf.style.display=inb?"block":"none";if(of)of.style.display=inb?"none":"block";}
+function saveShip(id){
+  const dir=$("#s_dir").value;
+  const contentsText=shipItems.map(it=>{const p=prod(it.productId);return it.qty+"× "+(p?p.name:"?");}).join(", ");
+  const o={tracking:$("#s_tr").value.trim(),carrier:$("#s_ca").value.trim(),direction:dir,status:$("#s_st").value.trim(),from:$("#s_from").value.trim(),to:$("#s_to").value.trim(),exp:$("#s_exp").value,items:shipItems.slice(),contents:contentsText,
+    sender:$("#s_sender").value.trim(),ourOrder:$("#s_order").value.trim(),
+    paid:$("#s_paid").checked,invoice:$("#s_inv").value.trim(),paidWhere:$("#s_paidwhere").value.trim(),
+    custPay:$("#s_custpay").value,shipCost:$("#s_shipcost").value===""?null:Number($("#s_shipcost").value),shipCostCur:$("#s_shipcur").value,
+    payAmt:$("#s_amt").value===""?null:Number($("#s_amt").value),payCur:$("#s_cur").value,cryptoTx:(id?db.shipments.find(x=>x.id===id).cryptoTx:""),
+    incoterm:$("#s_incoterm").value,customs:$("#s_customs").checked,nonEu:$("#s_customs").checked,jds:$("#s_jds").value.trim(),awb:$("#s_awb").value.trim(),customsValue:$("#s_cval").value===""?null:Number($("#s_cval").value),duty:$("#s_duty").value===""?null:Number($("#s_duty").value),procFee:$("#s_pfee").value===""?null:Number($("#s_pfee").value)};
+  if(!o.tracking){alert(t("dash.tracking"));return;}
+  if(id){Object.assign(db.shipments.find(x=>x.id===id),o);}else{o.id=db.seq.shipment++;db.shipments.push(o);}
+  save();closeModal();shipments();}
+
+// ---- ROLES / USERS / CURRENCIES ----
+function roles(){const rolesArr=["admin","user","visitor","external"];let html="",curG="";PERMS.forEach(p=>{if(p.g!==curG){curG=p.g;html+=`<tr class="grp-row"><td colspan="5">${PGRP[p.g][lang]||p.g}</td></tr>`;}html+=`<tr><td>${esc(p.l[lang]||p.l.sk)}<div class="muted" style="font-size:11px">${esc(p.code)}</div></td>`+rolesArr.map(r=>`<td style="text-align:center"><input type="checkbox" ${db.matrix[r][p.code]?"checked":""} onchange="togglePerm('${r}','${p.code}',this.checked)"></td>`).join("")+`</tr>`;});const editable=state.role==="admin";shell(t("ro.title"),editable?t("ro.sub"):t("ro.sub_ro"),editable?`<button class="btn ghost sm" onclick="resetMatrix()">${t("ro.reset")}</button>`:"",`${!editable?'<div class="note">'+t("ro.readonly",{r:state.role})+'</div>':''}<div class="panel"><table><thead><tr><th>${t("ro.col_perm")}</th><th style="text-align:center">Admin</th><th style="text-align:center">User</th><th style="text-align:center">Visitor</th><th style="text-align:center">External</th></tr></thead><tbody>${html}</tbody></table></div>`);if(!editable)document.querySelectorAll("#main input[type=checkbox]").forEach(c=>c.disabled=true);}
+function togglePerm(r,code,val){if(state.role!=="admin"){render();return;}db.matrix[r][code]=val;save();}
+function resetMatrix(){if(confirm(t("ro.reset")+"?")){db.matrix=JSON.parse(JSON.stringify(DEFAULT_MATRIX));save();roles();}}
+function users(){const canM=can("user.manage");const rows=db.users.map(u=>`<tr><td><b>${esc(u.name)}</b><div class="muted" style="font-size:11.5px">${esc(u.email)}</div></td><td><span class="tag b">${esc(u.role)}</span></td><td>${esc(u.scope)}</td><td>${u.active?'<span class="tag g">'+t("us.active")+'</span>':'<span class="tag gr">'+t("us.inactive")+'</span>'}</td></tr>`).join("");shell(t("us.title"),canM?t("us.sub"):t("us.sub_ro"),"",`${!canM?'<div class="note">'+t("us.nomanage")+'</div>':''}<div class="panel"><table><thead><tr><th>${t("us.col_user")}</th><th>${t("us.col_role")}</th><th>${t("us.col_scope")}</th><th>${t("us.col_state")}</th></tr></thead><tbody>${rows}</tbody></table></div><div class="panel"><div class="ph"><h3>${t("us.ext")}</h3></div><table><thead><tr><th>${t("us.col_name")}</th><th>${t("us.col_type")}</th><th>${t("us.col_access")}</th></tr></thead><tbody><tr><td><b>Partner API</b><div class="muted" style="font-size:11.5px">api@partner.com</div></td><td><span class="tag p">external</span></td><td>${t("us.ext_access")}</td></tr></tbody></table></div>`);}
+function currencies(){const rows=db.currencies.map(c=>`<tr><td><b>${esc(c.code)}</b>${c.primary?' <span class="tag b">'+t("cu.primary")+'</span>':''}</td><td>${esc(c.name)}</td><td>${c.type==="crypto"?'<span class="tag p">'+t("cu.crypto")+'</span>':'<span class="tag gr">'+t("cu.fiat")+'</span>'}</td><td>${c.decimals}</td><td>${c.active?'<span class="tag g">'+t("cu.active")+'</span>':'<span class="tag gr">'+t("cu.off")+'</span>'}</td><td style="text-align:right">${!c.primary?`<button class="btn ghost sm" onclick="setPrimary('${c.code}')">${t("cu.setprimary")}</button>`:''} <button class="btn ghost sm" onclick="toggleCur('${c.code}')">${c.active?t("cu.disable"):t("cu.enable")}</button></td></tr>`).join("");shell(t("cu.title"),t("cu.sub"),"",`<div class="panel"><table><thead><tr><th>${t("cu.col_code")}</th><th>${t("cu.col_name")}</th><th>${t("cu.col_type")}</th><th>${t("cu.col_dec")}</th><th>${t("cu.col_state")}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`);}
+function setPrimary(code){db.currencies.forEach(c=>c.primary=(c.code===code));save();currencies();}
+function toggleCur(code){const c=cur(code);if(c.primary){return;}c.active=!c.active;save();currencies();}
+function resetData(){if(confirm(t("c.reset")+"?")){db=seed();save();render();}}
+applyStatic();document.documentElement.lang=lang;render();
+</script>
+</body>
+</html>

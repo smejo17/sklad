@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sklad — testovacia appka</title>
+<style>
+  :root{--blue:#3b6fd4;--green:#2e9e5b;--orange:#e08a1e;--red:#d9534f;--dark:#1f2733;--grey:#5b6472;--line:#e2e8f2;--bg:#f5f7fb;--card:#fff}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--dark);font-size:16px}
+  .wrap{max-width:680px;margin:0 auto;padding:14px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#111a2b;color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10}
+  .top b{font-size:16px}.top .who{font-size:12px;color:#aebbd0}
+  .tabs{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
+  .tabs button{flex:1;min-width:90px;padding:11px 8px;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer}
+  .tabs button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+  label{display:block;font-size:13px;color:var(--grey);margin:10px 0 5px;font-weight:600}
+  input,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
+  .btn{width:100%;padding:14px;border:none;border-radius:10px;background:var(--blue);color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:12px}
+  .btn.green{background:var(--green)}.btn.red{background:var(--red)}.btn.ghost{background:#fff;color:var(--dark);border:1px solid var(--line)}
+  .btn.sm{width:auto;padding:8px 12px;margin:0;font-size:14px}
+  .btn:disabled{opacity:.5}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .inline{display:flex;gap:8px;align-items:flex-end}
+  .sug{border:1px solid var(--line);border-radius:10px;margin-top:6px;max-height:260px;overflow:auto}
+  .sug .it{padding:11px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+  .sug .it:active{background:#eef4ff}.sug .it b{font-size:15px}.sug .it .m{font-size:12px;color:var(--grey)}
+  .msg{padding:11px 12px;border-radius:10px;font-size:14px;margin:10px 0}
+  .msg.ok{background:#e4f6ea;color:#1d7d43}.msg.err{background:#fde8e7;color:#b02a26}
+  .lot{border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:8px}
+  .lot b{font-size:15px}.lot .m{font-size:12.5px;color:var(--grey);margin-top:3px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600;background:#eef1f6;color:#5b6472}
+  .tag.g{background:#e4f6ea;color:#1d7d43}.tag.o{background:#fdf0df;color:#a8630c}.tag.r{background:#fde8e7;color:#b02a26}.tag.b{background:#e6eefb;color:#2a4fa0}
+  .chosen{display:flex;justify-content:space-between;align-items:center;background:#eef4ff;border:1px solid #cfe0ff;border-radius:10px;padding:10px 12px}
+  .muted{color:var(--grey);font-size:13px}
+  h2{font-size:18px;margin-bottom:4px}
+  .hide{display:none!important}
+  .center{min-height:70vh;display:flex;align-items:center;justify-content:center}
+  .login{width:100%;max-width:360px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .toolbar input,.toolbar select{flex:1;min-width:120px}
+  #scanOverlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  #reader{width:100%;max-width:340px;background:#000;border-radius:12px;overflow:hidden}
+  #scanOverlay .lbl{color:#fff;margin-bottom:12px;font-size:15px}
+</style>
+</head>
+<body>
+<!-- LOGIN -->
+<div id="loginView" class="center wrap">
+  <div class="login"><div class="card">
+    <h2>Sklad — prihlásenie</h2>
+    <div class="muted" style="margin-top:4px">Testovacia verzia · dáta v Supabase</div>
+    <label>E-mail</label><input id="li_email" type="email" autocomplete="username">
+    <label>Heslo</label><input id="li_pass" type="password" autocomplete="current-password">
+    <button class="btn" id="li_btn" onclick="doLogin()">Prihlásiť sa</button>
+    <div id="li_msg"></div>
+  </div></div>
+</div>
+
+<!-- APP -->
+<div id="appView" class="hide">
+  <div class="top">
+    <div><b>Sklad</b> <span id="a_role" class="tag"></span><div class="who" id="a_email"></div></div>
+    <button class="btn ghost sm" onclick="doLogout()">Odhlásiť</button>
+  </div>
+  <div class="wrap">
+    <div class="tabs">
+      <button id="tab_recv" onclick="setTab('recv')">📥 Príjem</button>
+      <button id="tab_issue" onclick="setTab('issue')">📤 Výdaj</button>
+      <button id="tab_stock" onclick="setTab('stock')">🗄️ Zásoby</button>
+      <button id="tab_prods" onclick="setTab('prods')">📦 Produkty</button>
+      <button id="tab_docs" onclick="setTab('docs')">🧾 Doklady</button>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+
+<!-- SCANNER -->
+<div id="scanOverlay" class="hide">
+  <div class="lbl">Namier kameru na QR / čiarový kód</div>
+  <div id="reader"></div>
+  <button class="btn ghost" style="max-width:340px" onclick="closeScan()">Zrušiť</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+// ===== KONFIG (verejné hodnoty) =====
+const SUPA_URL="https://tvdwaknflrrreeqsetqu.supabase.co";
+const SUPA_KEY="sb_publishable_eRv55m3ChcSTGd3YoRspBg_TxYlC5NF";
+const sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+
+const $=s=>document.querySelector(s);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let ME={email:"",role:""};
+let DATA={products:[],warehouses:[],locations:[],categories:[],brands:[]};
+let recvSel=null, issueLots=[], issueSel=null, prodEdit=undefined, tab="recv";
+const canWrite=()=>ME.role==="admin"||ME.role==="user";
+const canDelete=()=>ME.role==="admin";
+
+// ===== AUTH =====
+async function init(){const {data:{session}}=await sb.auth.getSession();if(session)await onLogin();else showLogin();}
+function showLogin(){$("#loginView").classList.remove("hide");$("#appView").classList.add("hide");}
+async function doLogin(){
+  const email=$("#li_email").value.trim(),password=$("#li_pass").value;
+  $("#li_btn").disabled=true;$("#li_msg").innerHTML="";
+  const {error}=await sb.auth.signInWithPassword({email,password});
+  $("#li_btn").disabled=false;
+  if(error){$("#li_msg").innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return;}
+  await onLogin();
+}
+async function doLogout(){await sb.auth.signOut();showLogin();}
+async function onLogin(){
+  const {data:{user}}=await sb.auth.getUser();ME.email=user?user.email:"";
+  const {data:prof}=await sb.from("profiles").select("role").eq("id",user.id).maybeSingle();
+  ME.role=prof?prof.role:"visitor";
+  $("#a_email").textContent=ME.email;$("#a_role").textContent=ME.role;
+  $("#loginView").classList.add("hide");$("#appView").classList.remove("hide");
+  await loadData();setTab("recv");
+}
+
+// ===== DÁTA =====
+async function loadData(){
+  const [p,w,l,c,b]=await Promise.all([
+    sb.from("products").select("id,name,model,sku,category_id,price,currency,weight_g,brand_id,brands(name)").order("name").limit(3000),
+    sb.from("warehouses").select("id,name").order("name"),
+    sb.from("warehouse_locations").select("id,warehouse_id,code,description").order("sort_order"),
+    sb.from("categories").select("id,name,parent_id").order("name"),
+    sb.from("brands").select("id,name").order("name")
+  ]);
+  DATA.products=p.data||[];DATA.warehouses=w.data||[];DATA.locations=l.data||[];DATA.categories=c.data||[];DATA.brands=b.data||[];
+}
+function locsOf(whId){return DATA.locations.filter(l=>l.warehouse_id===Number(whId));}
+function brandName(p){return (p.brands&&p.brands.name)||"";}
+function catName(id){const c=DATA.categories.find(x=>x.id===id);return c?c.name:"";}
+function whName(id){const w=DATA.warehouses.find(x=>x.id===id);return w?w.name:"—";}
+
+// ===== TABY =====
+const TABS=["recv","issue","stock","prods","docs"];
+function setTab(t){tab=t;TABS.forEach(x=>$("#tab_"+x).classList.toggle("on",x===t));
+  ({recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProds,docs:loadDocs}[t])();}
+
+// ===== SKENOVANIE QR (kamera) =====
+let qrScanner=null,scanCb=null;
+function openScan(cb){scanCb=cb;$("#scanOverlay").classList.remove("hide");
+  if(!window.Html5Qrcode){alert("Skener sa nenačítal (internet?).");closeScan();return;}
+  qrScanner=new Html5Qrcode("reader");
+  qrScanner.start({facingMode:"environment"},{fps:10,qrbox:230},txt=>{const cb=scanCb;closeScan();if(cb)cb(txt);},()=>{})
+    .catch(e=>{alert("Kamera sa nespustila: "+e);closeScan();});
+}
+function closeScan(){if(qrScanner){qrScanner.stop().then(()=>qrScanner.clear()).catch(()=>{});qrScanner=null;}scanCb=null;$("#scanOverlay").classList.add("hide");}
+
+// ===== PRÍJEM =====
+function renderRecv(){
+  if(!canWrite()){$("#view").innerHTML=`<div class="card"><div class="msg err">Táto rola nemôže prijímať (user/admin).</div></div>`;return;}
+  if(!recvSel){
+    $("#view").innerHTML=`<div class="card"><h2>Príjem na sklad</h2>
+      <label>Produkt</label><input id="r_q" placeholder="napíš názov, napr. Antminer" oninput="rSearch()" autocomplete="off">
+      <div id="r_sug" class="sug"></div></div>`;
+    setTimeout(()=>{$("#r_q").focus();rSearch();},30);
+  }else{
+    const p=DATA.products.find(x=>x.id===recvSel);
+    $("#view").innerHTML=`<div class="card">
+      <div class="chosen"><div><div class="muted">Vybraný produkt</div><b>${esc(p.name)}</b></div><button class="btn ghost sm" onclick="rReset()">Zmeniť</button></div>
+      <div class="row2"><div><label>Sklad</label><select id="r_wh" onchange="rFillLoc()">${DATA.warehouses.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("")}</select></div>
+      <div><label>Pozícia</label><select id="r_loc"></select></div></div>
+      <label>Evidencia</label><select id="r_track" onchange="rTrackUI()"><option value="unit">Kus (QR/SN)</option><option value="bulk">Množstvo (spotreb.)</option></select>
+      <div id="r_unitbox"><label>Sériové číslo (nepovinné)</label><input id="r_sn" placeholder="SN-…">
+        <label>QR kód</label><div class="inline"><input id="r_qr" placeholder="QR-…"><button class="btn ghost sm" onclick="openScan(t=>$('#r_qr').value=t)">📷</button></div></div>
+      <div id="r_bulkbox" class="hide"><label>Množstvo (ks)</label><input id="r_qty" type="number" min="1" value="1">
+        <label>QR na bedničke</label><div class="inline"><input id="r_qrb" placeholder="QR-BOX-…"><button class="btn ghost sm" onclick="openScan(t=>$('#r_qrb').value=t)">📷</button></div></div>
+      <label>Doklad / faktúra</label><input id="r_doc" placeholder="FA-… / dodací list">
+      <button class="btn green" id="r_save" onclick="rSave()">✓ Prijať na sklad</button>
+      <div id="r_msg"></div></div>`;
+    rFillLoc();
+  }
+}
+function rSearch(){const q=($("#r_q").value||"").trim().toLowerCase();let list=DATA.products;
+  if(q)list=list.filter(p=>((p.name||"")+" "+brandName(p)+" "+(p.model||"")+" "+(p.sku||"")).toLowerCase().includes(q));
+  list=list.slice(0,25);
+  $("#r_sug").innerHTML=list.length?list.map(p=>`<div class="it" onclick="rPick(${p.id})"><b>${esc(p.name)}</b><div class="m">${esc(brandName(p))} ${esc(p.model||"")} ${esc(p.sku||"")}</div></div>`).join(""):`<div class="it muted">Nič sa nenašlo.</div>`;}
+function rPick(id){recvSel=id;renderRecv();}
+function rReset(){recvSel=null;renderRecv();}
+function rFillLoc(){$("#r_loc").innerHTML=locsOf($("#r_wh").value).map(l=>`<option value="${l.id}">${esc(l.code)}${l.description?" — "+esc(l.description):""}</option>`).join("")||`<option value="">—</option>`;}
+function rTrackUI(){const b=$("#r_track").value==="bulk";$("#r_bulkbox").classList.toggle("hide",!b);$("#r_unitbox").classList.toggle("hide",b);}
+async function rSave(){
+  const track=$("#r_track").value,loc=$("#r_loc").value?Number($("#r_loc").value):null;
+  const lot={product_id:recvSel,warehouse_id:Number($("#r_wh").value),location_id:loc,track,
+    quantity:track==="bulk"?Number($("#r_qty").value||1):1,
+    serial:track==="unit"?($("#r_sn").value.trim()||null):null,
+    qr_code:(track==="bulk"?$("#r_qrb").value.trim():$("#r_qr").value.trim())||null,
+    status:"skladom",state:"new",buy_currency:"CZK",buy_date:new Date().toISOString().slice(0,10),invoice_number:$("#r_doc").value.trim()||null};
+  $("#r_save").disabled=true;$("#r_msg").innerHTML="";
+  const {data,error}=await sb.from("stock_lots").insert(lot).select().single();
+  if(error){$("#r_save").disabled=false;$("#r_msg").innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return;}
+  await sb.from("stock_movements").insert({type:"prijem",product_id:recvSel,lot_id:data.id,quantity:lot.quantity,warehouse_id:lot.warehouse_id,location_id:loc,via:"fyzicky",document:lot.invoice_number,serial:lot.serial});
+  const p=DATA.products.find(x=>x.id===recvSel);recvSel=null;renderRecv();
+  $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Prijaté: ${esc(p?p.name:"")} (${lot.quantity} ks).</div>`);
+}
+
+// ===== VÝDAJ =====
+async function renderIssue(){
+  if(!canWrite()){$("#view").innerHTML=`<div class="card"><div class="msg err">Táto rola nemôže vydávať (user/admin).</div></div>`;return;}
+  issueSel=null;
+  $("#view").innerHTML=`<div class="card"><h2>Výdaj zo skladu</h2>
+    <label>Nájdi položku (QR / SN / názov / pozícia)</label>
+    <div class="inline"><input id="i_q" placeholder="naskenuj QR alebo napíš…" oninput="iSearch()" autocomplete="off"><button class="btn ghost sm" onclick="openScan(t=>{$('#i_q').value=t;iSearch();})">📷</button></div>
+    <div id="i_sug" class="sug"></div></div><div id="i_form"></div>`;
+  // načítaj zásoby do pamäte pre hľadanie
+  const {data}=await sb.from("stock_lots").select("id,quantity,track,serial,qr_code,status,product_id,warehouse_id,location_id,products(name),warehouses(name),warehouse_locations(code)").order("id",{ascending:false}).limit(1000);
+  issueLots=data||[];iSearch();
+}
+function iSearch(){const q=($("#i_q")?$("#i_q").value:"").trim().toLowerCase();let list=issueLots;
+  if(q)list=list.filter(l=>((l.products&&l.products.name||"")+" "+(l.serial||"")+" "+(l.qr_code||"")+" "+((l.warehouse_locations&&l.warehouse_locations.code)||"")).toLowerCase().includes(q));
+  list=list.slice(0,25);
+  const box=$("#i_sug");if(!box)return;
+  box.innerHTML=list.length?list.map(l=>`<div class="it" onclick="iPick(${l.id})"><b>${esc(l.products&&l.products.name||"?")}</b><div class="m">${esc((l.warehouses&&l.warehouses.name)||"")} · ${esc((l.warehouse_locations&&l.warehouse_locations.code)||"—")} · ${l.quantity} ks${l.serial?" · "+esc(l.serial):""}${l.qr_code?" · "+esc(l.qr_code):""}</div></div>`).join(""):`<div class="it muted">Nič sa nenašlo.</div>`;}
+function iPick(id){issueSel=issueLots.find(l=>l.id===id);const l=issueSel;
+  $("#i_sug").innerHTML="";$("#i_q").value=(l.products&&l.products.name)||"";
+  $("#i_form").innerHTML=`<div class="card">
+    <div class="chosen"><div><b>${esc(l.products&&l.products.name||"?")}</b><div class="muted">${esc((l.warehouses&&l.warehouses.name)||"")} · ${esc((l.warehouse_locations&&l.warehouse_locations.code)||"—")} · na sklade: ${l.quantity}</div></div></div>
+    ${l.track==="bulk"?`<label>Množstvo na výdaj</label><input id="i_qty" type="number" min="1" max="${l.quantity}" value="1">`:""}
+    <label>Spôsob</label><select id="i_via"><option value="fyzicky">fyzicky</option><option value="zasielkou">zásielkou</option></select>
+    <label>Účel / dôvod</label><input id="i_reason" placeholder="napr. predaj">
+    <label>Doklad / objednávka</label><input id="i_doc" placeholder="OBJ-…">
+    <button class="btn red" id="i_save" onclick="iDo()">Vydať zo skladu</button><div id="i_msg"></div></div>`;
+}
+async function iDo(){
+  const l=issueSel;if(!l)return;
+  let qty=l.track==="bulk"?Math.max(1,Math.min(Number($("#i_qty").value||1),l.quantity)):1;
+  $("#i_save").disabled=true;$("#i_msg").innerHTML="";
+  await sb.from("stock_movements").insert({type:"vydaj",product_id:l.product_id,lot_id:l.id,quantity:qty,warehouse_id:l.warehouse_id,location_id:l.location_id,via:$("#i_via").value,document:$("#i_doc").value.trim()||null,purpose:$("#i_reason").value.trim()||null,serial:l.serial});
+  let err;
+  if(l.track==="bulk"&&qty<l.quantity){const r=await sb.from("stock_lots").update({quantity:l.quantity-qty}).eq("id",l.id);err=r.error;}
+  else {const r=await sb.from("stock_lots").delete().eq("id",l.id);err=r.error;}
+  if(err){$("#i_save").disabled=false;$("#i_msg").innerHTML=`<div class="msg err">${esc(err.message)}</div>`;return;}
+  renderIssue();
+  $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Vydané: ${esc(l.products&&l.products.name||"")} (${qty} ks).</div>`);
+}
+
+// ===== ZÁSOBY =====
+async function loadStock(){
+  $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
+  const {data,error}=await sb.from("stock_lots").select("id,quantity,track,serial,qr_code,status,state,product_id,products(name),warehouses(name),warehouse_locations(code)").order("id",{ascending:false}).limit(1000);
+  if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
+  const g={};(data||[]).forEach(l=>{(g[l.product_id]=g[l.product_id]||[]).push(l);});
+  const keys=Object.keys(g);
+  if(!keys.length){$("#view").innerHTML=`<div class="card muted">Zatiaľ žiadne zásoby.</div>`;return;}
+  let html="";keys.forEach(k=>{const lots=g[k];const nm=(lots[0].products&&lots[0].products.name)||"?";const tot=lots.reduce((s,l)=>s+(+l.quantity||0),0);
+    html+=`<div class="card"><b>${esc(nm)}</b> <span class="tag g">${tot} ks</span>`;
+    lots.forEach(l=>{const wh=(l.warehouses&&l.warehouses.name)||"—";const loc=(l.warehouse_locations&&l.warehouse_locations.code)||"—";
+      const st=l.status==="na_ceste"?`<span class="tag o">na ceste</span>`:`<span class="tag">${esc(loc)}</span>`;
+      html+=`<div class="lot"><div>${esc(wh)} · ${st} · <b>${l.quantity} ks</b></div><div class="m">${l.track==="unit"?"kus":"množstvo"}${l.serial?" · SN: "+esc(l.serial):""}${l.qr_code?" · "+esc(l.qr_code):""} · ${l.state==="new"?"nové":"použité"}</div></div>`;});
+    html+=`</div>`;});
+  $("#view").innerHTML=html;
+}
+
+// ===== PRODUKTY (správa + filtre) =====
+let pf={q:"",cat:"",brand:""};
+function renderProds(){
+  let list=DATA.products.slice();
+  if(pf.cat)list=list.filter(p=>String(p.category_id)===pf.cat);
+  if(pf.brand)list=list.filter(p=>String(p.brand_id)===pf.brand);
+  if(pf.q){const q=pf.q.toLowerCase();list=list.filter(p=>((p.name||"")+" "+brandName(p)+" "+(p.model||"")+" "+(p.sku||"")).toLowerCase().includes(q));}
+  const catOpts=`<option value="">Všetky kategórie</option>`+DATA.categories.map(c=>`<option value="${c.id}" ${pf.cat==String(c.id)?"selected":""}>${esc(c.name)}</option>`).join("");
+  const brOpts=`<option value="">Všetky značky</option>`+DATA.brands.map(b=>`<option value="${b.id}" ${pf.brand==String(b.id)?"selected":""}>${esc(b.name)}</option>`).join("");
+  const rows=list.slice(0,300).map(p=>`<div class="lot"><div><b>${esc(p.name)}</b> ${p.price!=null?`<span class="tag">${p.price} ${esc(p.currency||"")}</span>`:""}</div><div class="m">${esc(brandName(p))} · ${esc(catName(p.category_id))}${p.weight_g?" · "+p.weight_g+" g":""}${p.sku?" · "+esc(p.sku):""} ${canWrite()?`· <span style="color:var(--blue)" onclick="prodForm(${p.id})">upraviť</span>`:""}</div></div>`).join("")||`<div class="muted">Žiadne produkty.</div>`;
+  $("#view").innerHTML=`<div class="card">
+    ${canWrite()?`<button class="btn" onclick="prodForm(0)">+ Nový produkt</button>`:""}
+    <div class="toolbar" style="margin-top:12px"><input placeholder="Hľadať…" value="${esc(pf.q)}" oninput="pf.q=this.value;renderProds()">
+      <select onchange="pf.cat=this.value;renderProds()">${catOpts}</select>
+      <select onchange="pf.brand=this.value;renderProds()">${brOpts}</select></div>
+    <div class="muted" style="margin-bottom:8px">${list.length} produktov</div>${rows}</div>`;
+}
+function prodForm(id){
+  const p=id?DATA.products.find(x=>x.id===id):{price:"",currency:"CZK"};
+  const catOpts=DATA.categories.map(c=>`<option value="${c.id}" ${p.category_id===c.id?"selected":""}>${esc(c.name)}</option>`).join("");
+  const brOpts=`<option value="">— značka —</option>`+DATA.brands.map(b=>`<option value="${b.id}" ${p.brand_id===b.id?"selected":""}>${esc(b.name)}</option>`).join("")+`<option value="__new">➕ nová značka…</option>`;
+  $("#view").innerHTML=`<div class="card"><h2>${id?"Upraviť produkt":"Nový produkt"}</h2>
+    <label>Názov</label><input id="p_name" value="${esc(p.name||"")}">
+    <div class="row2"><div><label>Značka</label><select id="p_brand" onchange="if(this.value==='__new')pNewBrand(this)">${brOpts}</select></div>
+    <div><label>Model</label><input id="p_model" value="${esc(p.model||"")}"></div></div>
+    <div class="row2"><div><label>Kategória</label><select id="p_cat">${catOpts}</select></div>
+    <div><label>SKU</label><input id="p_sku" value="${esc(p.sku||"")}"></div></div>
+    <div class="row2"><div><label>Cena</label><input id="p_price" type="number" step="any" value="${esc(p.price)}"></div>
+    <div><label>Mena</label><select id="p_cur"><option ${p.currency==="CZK"?"selected":""}>CZK</option><option ${p.currency==="EUR"?"selected":""}>EUR</option><option ${p.currency==="USD"?"selected":""}>USD</option></select></div></div>
+    <label>Hmotnosť (g)</label><input id="p_weight" type="number" step="any" value="${esc(p.weight_g)}">
+    <button class="btn green" id="p_save" onclick="pSave(${id||0})">Uložiť</button>
+    <button class="btn ghost" onclick="setTab('prods')">Späť</button>
+    <div id="p_msg"></div></div>`;
+}
+async function pNewBrand(selEl){const n=prompt("Názov novej značky:");if(!n||!n.trim()){selEl.value="";return;}
+  const {data,error}=await sb.from("brands").insert({name:n.trim()}).select().single();
+  if(error){alert(error.message);selEl.value="";return;}
+  DATA.brands.push(data);DATA.brands.sort((a,b)=>a.name.localeCompare(b.name));
+  selEl.innerHTML=`<option value="">— značka —</option>`+DATA.brands.map(b=>`<option value="${b.id}" ${b.id===data.id?"selected":""}>${esc(b.name)}</option>`).join("")+`<option value="__new">➕ nová značka…</option>`;
+}
+async function pSave(id){
+  const bv=$("#p_brand").value;
+  const o={name:$("#p_name").value.trim(),model:$("#p_model").value.trim()||null,brand_id:(bv&&bv!=="__new")?Number(bv):null,
+    category_id:$("#p_cat").value?Number($("#p_cat").value):null,sku:$("#p_sku").value.trim()||null,
+    price:$("#p_price").value===""?null:Number($("#p_price").value),currency:$("#p_cur").value,
+    weight_g:$("#p_weight").value===""?null:Number($("#p_weight").value),type:"simple"};
+  if(!o.name){$("#p_msg").innerHTML=`<div class="msg err">Zadaj názov.</div>`;return;}
+  $("#p_save").disabled=true;
+  let res;
+  if(id)res=await sb.from("products").update(o).eq("id",id).select("id,name,model,sku,category_id,price,currency,weight_g,brand_id,brands(name)").single();
+  else {o.source="manual";res=await sb.from("products").insert(o).select("id,name,model,sku,category_id,price,currency,weight_g,brand_id,brands(name)").single();}
+  if(res.error){$("#p_save").disabled=false;$("#p_msg").innerHTML=`<div class="msg err">${esc(res.error.message)}</div>`;return;}
+  if(id){const i=DATA.products.findIndex(x=>x.id===id);if(i>=0)DATA.products[i]=res.data;}else DATA.products.push(res.data);
+  DATA.products.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  setTab("prods");$("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Uložené: ${esc(o.name)}.</div>`);
+}
+
+// ===== DOKLADY =====
+let docFilter="";
+async function loadDocs(){
+  $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
+  let qy=sb.from("stock_movements").select("id,type,quantity,serial,document,purpose,via,happened_at,product_id,products(name),warehouses(name)").order("happened_at",{ascending:false}).limit(300);
+  if(docFilter==="in")qy=qy.eq("type","prijem");if(docFilter==="out")qy=qy.eq("type","vydaj");
+  const {data,error}=await qy;
+  const tabBtn=(v,l)=>`<button class="btn sm ${docFilter===v?"":"ghost"}" onclick="docFilter='${v}';loadDocs()" style="margin-right:6px">${l}</button>`;
+  if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
+  const rows=(data||[]).map(m=>{const nm=(m.products&&m.products.name)||"?";const tg=m.type==="prijem"?`<span class="tag g">príjem</span>`:m.type==="vydaj"?`<span class="tag r">výdaj</span>`:`<span class="tag b">${esc(m.type)}</span>`;
+    return `<div class="lot"><div>${tg} <b>${esc(nm)}</b> · ${m.type==="vydaj"?"−":"+"}${m.quantity} ks</div><div class="m">${esc((m.happened_at||"").replace("T"," ").slice(0,16))} · ${esc((m.warehouses&&m.warehouses.name)||"")}${m.serial?" · SN: "+esc(m.serial):""}${m.document?" · "+esc(m.document):""}${m.purpose?" · "+esc(m.purpose):""}${m.via?" · "+esc(m.via):""}</div></div>`;}).join("")||`<div class="muted">Žiadne pohyby.</div>`;
+  $("#view").innerHTML=`<div class="card"><div style="margin-bottom:10px">${tabBtn("","Všetko")}${tabBtn("in","Príjemky")}${tabBtn("out","Výdajky")}</div>${rows}</div>`;
+}
+
+// štart
+$("#li_pass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+init();
+</script>
+</body>
+</html>

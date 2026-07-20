@@ -1,0 +1,31 @@
+# ---- Dependencies ----
+node_modules/
+tools/**/node_modules/
+
+# ---- Large / generated data (never commit) ----
+audit.jsonl
+*.jsonl
+uploads/
+uploads-tmp/
+
+# ---- Raw source dumps (distilled versions live in docs/) ----
+*.rtf
+
+# ---- OS / editor junk ----
+.DS_Store
+.AppleDouble
+Thumbs.db
+*.swp
+*~
+.~lock.*#
+*.tmp
+
+# ---- Local env / secrets ----
+.env
+.env.*
+*.local
+supabase/.temp/
+
+# ---- Build output ----
+dist/
+build/
