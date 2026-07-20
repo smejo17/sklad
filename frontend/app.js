@@ -1535,7 +1535,7 @@ function shipForm(){
     <label>Sledovacie číslo (tracking)</label><div class="inline" style="flex-wrap:wrap;gap:6px"><input id="s_trk" placeholder="napr. 1Z… / CN…"><button class="btn ghost sm" onclick="openScan(t=>$('#s_trk').value=t,{qr:true})">📷</button><button class="btn sm" type="button" onclick="shipFormTrack()">🔍 Zistiť údaje</button><button class="btn ghost sm" type="button" onclick="shipLabelAddPhoto()">📷 Odfotiť štítok (AI)</button></div>
     <div id="s_labeltray" style="margin-top:6px"></div>
     <div id="s_trkmsg" style="margin-top:6px"></div>
-    <label>Prepravca</label><input id="s_carr" list="carrierList" placeholder="UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta…"><datalist id="carrierList"><option>UPS</option><option>FedEx</option><option>DHL Express</option><option>DHL Freight</option><option>GLS</option><option>PPL</option><option>Packeta</option><option>Česká pošta</option></datalist>
+    <label>Prepravca</label><input id="s_carr" list="carrierList" placeholder="UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta…"><datalist id="carrierList"><option>UPS</option><option>FedEx</option><option>DHL Express</option><option>DHL Freight</option><option>GLS</option><option>PPL</option><option>Packeta</option><option>Česká pošta</option><option>Balíkovna</option></datalist>
     <div class="muted" style="font-size:12px;margin-top:4px">Smer zásielky (od nás / k nám / dropship) sa určí automaticky z adries.</div>
     <div class="row2"><div><label>Dodávateľ / odosielateľ (kto)</label><input id="s_send"></div>
     <div><label>Odkiaľ (adresa)</label><input id="s_from" placeholder="mesto / krajina / adresa"></div></div>
@@ -1785,17 +1785,20 @@ async function shipPOD(id){
 function detectCarrierName(carrier,tracking){const c=(carrier||"").toLowerCase();
   if(/fedex|fdx/.test(c))return "FedEx";
   if(/gls/.test(c))return "GLS";
-  if(/dhl/.test(c))return /freight|dhli|mydhli/.test(c)?"DHL Freight":"DHL Express";
+  if(/dhl/.test(c))return "DHL Express";            // Unified API pokrýva Express aj Freight/Forwarding (myDHLi)
   if(/ups/.test(c))return "UPS";
+  if(/bal[íi]kovn/.test(c))return "Balíkovna";
+  if(/po[šs]ta|cpost|[čc]esk[áa] po/.test(c))return "Česká pošta";
   const t=(tracking||"").toUpperCase().replace(/\s/g,"");
   if(/^1Z[0-9A-Z]{16}$/.test(t))return "UPS";
   if(/^(JJD|JVGL|JD|GM|LX)/.test(t))return "DHL Express";
+  if(/^[A-Z]{2}\d{9}CZ$/.test(t))return "Česká pošta"; // UPU formát RR…CZ (Č. pošta / Balíkovňa)
   if(/^(ZBA|GLS)/.test(t)||/^\d{11,14}$/.test(t)&&/^0/.test(t))return "GLS";
   if(/^\d{12}$|^\d{15}$|^\d{20}$|^\d{22}$/.test(t))return "FedEx";
   return "";}
-function carrierFnByName(name){return {"FedEx":{fn:"fedex-track",name:"FedEx"},"GLS":{fn:"gls-track",name:"GLS"},"DHL Express":{fn:"dhl-track",name:"DHL Express"},"DHL Freight":{fn:"dhl-freight-track",name:"DHL Freight"},"UPS":{fn:"ups-track",name:"UPS"}}[name]||null;}
+function carrierFnByName(name){return {"FedEx":{fn:"fedex-track",name:"FedEx"},"GLS":{fn:"gls-track",name:"GLS"},"DHL Express":{fn:"dhl-track",name:"DHL"},"DHL Freight":{fn:"dhl-track",name:"DHL"},"UPS":{fn:"ups-track",name:"UPS"},"Česká pošta":{fn:"ceska-posta-track",name:"Česká pošta"},"Balíkovna":{fn:"ceska-posta-track",name:"Balíkovna"}}[name]||null;}
 function carrierFn(carrier,tracking){const n=detectCarrierName(carrier,tracking);return carrierFnByName(n)||carrierFnByName("UPS");}
-function carrierSecrets(name){return {"UPS":"UPS_CLIENT_ID / UPS_CLIENT_SECRET","FedEx":"FEDEX_CLIENT_ID / FEDEX_CLIENT_SECRET","DHL Express":"DHL_API_KEY","DHL Freight":"(DHL Freight / MyDHLi prihlásenie)","GLS":"GLS_TRACK_URL + prihlásenie"}[name]||"prihlasovacie údaje prepravcu";}
+function carrierSecrets(name){return {"UPS":"UPS_CLIENT_ID / UPS_CLIENT_SECRET","FedEx":"FEDEX_CLIENT_ID / FEDEX_CLIENT_SECRET","DHL Express":"DHL_API_KEY (Unified API — Express aj Freight)","DHL Freight":"DHL_API_KEY (Unified API)","GLS":"GLS_TRACK_URL + prihlásenie","Česká pošta":"(verejné API — bez kľúča)","Balíkovna":"(verejné API — bez kľúča)"}[name]||"prihlasovacie údaje prepravcu";}
 async function shipUpsTrack(id){
   const {data:s}=await sb.from("shipments").select("tracking_number,carrier").eq("id",id).single();
   if(!s||!s.tracking_number){alert("Zásielka nemá tracking číslo.");return;}
