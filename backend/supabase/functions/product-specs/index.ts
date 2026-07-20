@@ -67,7 +67,8 @@ Pravidlá:
     // ponechaj len známe kľúče
     const allowed: Record<string, unknown> = {};
     for (const a of attrs) { if (out[a.key] != null && out[a.key] !== "") allowed[a.key] = out[a.key]; }
-    return json({ attrs: allowed });
+    const usage = d?.usage ? { input_tokens: d.usage.input_tokens, output_tokens: d.usage.output_tokens, model: aiModel } : null;
+    return json({ attrs: allowed, usage });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }

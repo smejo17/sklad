@@ -359,9 +359,12 @@ function rPhoto(){
 let aiExtract=null;
 function aiPick(){const i=$("#aiPhoto");i.value="";i.click();}
 function aiFile(file){if(!file)return;const r=new FileReader();r.onload=()=>aiRun(r.result);r.readAsDataURL(file);}
+// zaznamenaj spotrebu AI (pre počítadlo nákladov v Administrácii); tichá, chyby ignoruje
+async function logAiUsage(fn,data){try{const u=data&&data.usage;if(!u)return;await sb.from("ai_usage").insert({fn,model:u.model||null,input_tokens:u.input_tokens||0,output_tokens:u.output_tokens||0,created_by:ME.id||null});}catch(e){}}
 async function aiRun(dataUrl){
   const box=$("#r_sug");if(box)box.innerHTML=`<div class="it muted">🔍 Rozpoznávam z fotky…</div>`;
   const {data,error}=await sb.functions.invoke("identify-product",{body:{labelImage:dataUrl}});
+  logAiUsage("identify-product",data);
   if(error||(data&&data.error)){if(box)box.innerHTML="";alert("AI rozpoznávanie nie je dostupné.\n(Skontroluj, či je nasadená Edge Function identify-product a nastavený AI kľúč.)\n\n"+esc((error&&error.message)||(data&&data.error)||""));return;}
   if(data.source==="internal"&&data.product){if(!DATA.products.find(p=>p.id===data.product.id))DATA.products.push(data.product);rPick(data.product.id);return;}
   aiExtract=data.extracted||data.suggestion||{};
@@ -989,6 +992,7 @@ async function prodFetchSpecs(id){const p=DATA.products.find(x=>x.id===id);if(!p
   if(defs.length){try{
     const bname=brandName(p);
     const {data,error}=await sb.functions.invoke("product-specs",{body:{name:p.name,brand:bname,model:p.model,category:catName(p.category_id),attributes:defs.map(d=>({key:d.attr_key,label:d.label,type:d.type,unit:d.unit,options:d.options}))}});
+    logAiUsage("product-specs",data);
     if(!error&&data&&data.attrs){
       const rows=[];defs.forEach(d=>{const v=data.attrs[d.attr_key];if(v!=null&&v!==""){const num=Number(v);rows.push({product_id:id,attr_def_id:d.id,value:String(v),value_num:isNaN(num)?null:num});}});
       // nezmaž existujúce; doplň len chýbajúce
@@ -1103,7 +1107,7 @@ async function pAiSpecs(){
   const model=$("#p_model")?$("#p_model").value.trim():"";
   const msg=$("#p_scanmsg");if(msg)msg.innerHTML=`<div class="muted">🤖 Dopĺňam parametre z názvu/modelu…</div>`;
   let data=null,error=null;
-  try{const r=await sb.functions.invoke("product-specs",{body:{name,brand:bname,model,category:catName(cid),attributes:defs.map(d=>({key:d.attr_key,label:d.label,type:d.type,unit:d.unit,options:d.options}))}});data=r.data;error=r.error;}catch(e){error=e;}
+  try{const r=await sb.functions.invoke("product-specs",{body:{name,brand:bname,model,category:catName(cid),attributes:defs.map(d=>({key:d.attr_key,label:d.label,type:d.type,unit:d.unit,options:d.options}))}});data=r.data;error=r.error;logAiUsage("product-specs",data);}catch(e){error=e;}
   if(error||(data&&data.error)||!data||!data.attrs){if(msg)msg.innerHTML=`<div class="msg err">AI dopĺňanie nie je dostupné. Nasaď edge funkciu <b>product-specs</b> a nastav <b>ANTHROPIC_API_KEY</b>.${data&&data.error?"<br>"+esc(data.error):""}</div>`;return;}
   let n=0;defs.forEach(d=>{const v=data.attrs[d.attr_key];if(v!=null&&v!==""){formAttrs[d.id]=String(v);n++;}});
   renderProdAttrs();
@@ -1580,6 +1584,7 @@ function shipRecognizeLabels(){
       const blob=await compressImage(f,1200*1024,1800);
       const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(blob);});
       const {data,error}=await sb.functions.invoke("identify-labels",{body:{labelImage:dataUrl}});
+      logAiUsage("identify-labels",data);
       if(error||(data&&data.error)||!data||!data.found){
         const det=(data&&data.error)||(error&&(error.message||error.name))||"funkcia možno nie je nasadená";
         if(box)box.innerHTML=`<div class="msg err">Rozpoznávanie zlyhalo: ${esc(String(det))}<br><span class="muted">Skontroluj: funkcia <b>identify-labels</b> je nasadená a je nastavený <b>ANTHROPIC_API_KEY</b>.</span></div>`;return;}
@@ -2238,8 +2243,31 @@ async function renderSettings(){
     <button class="btn green" onclick="sAddLoc()">Pridať pozíciu</button></div>
   <div class="card"><div class="muted">Kategórie a tagy spravuješ na samostatnej stránke <b>🗂️ Kategórie a tagy</b>.</div></div>
   <div class="card" id="userAdmin"><h2>👤 Používatelia</h2><div class="muted">Načítavam…</div></div>
+  <div class="card" id="aiCosts"><h2>💰 AI náklady</h2><div class="muted">Načítavam…</div></div>
   ${rolesPermsCard(roles,perms,rperms)}`;
   renderUserAdmin();
+  renderAiCosts();
+}
+// ===== POČÍTADLO AI NÁKLADOV (admin) =====
+// ceny USD za 1M tokenov [vstup, výstup]
+const AI_PRICES={"claude-haiku-4-5":[1,5],"claude-haiku-4-5-20251001":[1,5],"claude-sonnet-5":[3,15],"claude-sonnet-4-6":[3,15],"claude-opus-4-8":[5,25],"claude-opus-4-7":[5,25]};
+function aiRowCost(r){const p=AI_PRICES[r.model]||AI_PRICES["claude-haiku-4-5"];return (r.input_tokens||0)/1e6*p[0]+(r.output_tokens||0)/1e6*p[1];}
+async function renderAiCosts(){
+  const box=$("#aiCosts");if(!box)return;
+  const {data,error}=await sb.from("ai_usage").select("fn,model,input_tokens,output_tokens,created_at").order("created_at",{ascending:false}).limit(5000);
+  if(error){box.innerHTML=`<h2>💰 AI náklady</h2><div class="msg err">${esc(error.message)}</div><div class="muted">Spustil si v Supabase <b>supabase_ai_usage.sql</b>?</div>`;return;}
+  const rows=data||[];
+  const today=new Date().toISOString().slice(0,10),ym=today.slice(0,7);
+  let cAll=0,cToday=0,cMonth=0,tokIn=0,tokOut=0;const byFn={};
+  rows.forEach(r=>{const c=aiRowCost(r);cAll+=c;tokIn+=r.input_tokens||0;tokOut+=r.output_tokens||0;const d=(r.created_at||"").slice(0,10);if(d===today)cToday+=c;if(d.slice(0,7)===ym)cMonth+=c;const b=byFn[r.fn]=byFn[r.fn]||{n:0,c:0};b.n++;b.c+=c;});
+  const usd=v=>"$"+v.toFixed(v<1?4:2);
+  const fnLbl={"identify-product":"Rozpoznanie produktu (fotka)","product-specs":"Parametre (AI)","identify-labels":"Kódy zásielky (fotka)"};
+  const fnRows=Object.entries(byFn).sort((a,b)=>b[1].c-a[1].c).map(([f,v])=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center"><span>${esc(fnLbl[f]||f)} <span class="muted">· ${v.n}×</span></span><b>${usd(v.c)}</b></div>`).join("")||`<div class="muted">Zatiaľ žiadne AI volania.</div>`;
+  box.innerHTML=`<h2>💰 AI náklady</h2>
+    <div class="row2"><div class="lot"><div class="m">Dnes</div><b>${usd(cToday)}</b></div><div class="lot"><div class="m">Tento mesiac</div><b>${usd(cMonth)}</b></div><div class="lot"><div class="m">Celkovo</div><b>${usd(cAll)}</b></div></div>
+    <div class="muted" style="margin:6px 0">${rows.length} volaní · ${fmtNum(tokIn)} vstupných + ${fmtNum(tokOut)} výstupných tokenov</div>
+    ${fnRows}
+    <div class="muted" style="font-size:12px;margin-top:8px">Odhad podľa cenníka modelu. Presné vyúčtovanie v $ je v <b>console.anthropic.com → Usage</b>.</div>`;
 }
 // ===== SPRÁVA POUŽÍVATEĽOV (admin) — cez edge funkciu admin-users =====
 let ADMIN_ROLES=["admin","skladník","technik","visitor","zamestnanec","dočasný","externý"];

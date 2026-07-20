@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
     if (!labelImage && !productImage) return json({ error: "Chýba fotka." }, 400);
 
     // vision extrakcia
-    const extracted = await visionExtract([labelImage, productImage].filter(Boolean));
+    const vr = await visionExtract([labelImage, productImage].filter(Boolean));
+    const extracted = vr.data, usage = vr.usage;
 
     // klient s právami prihláseného používateľa (RLS)
     const supabase = createClient(
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
       const { data } = await supabase.from("products").select(sel).ilike("name", `%${needle}%`).limit(5);
       if (data && data.length) match = data[0];
     }
-    if (match) return json({ source: "internal", extracted, product: match });
+    if (match) return json({ source: "internal", extracted, product: match, usage });
 
     // 3) nie je interne -> návrh na potvrdenie (produkt sa NEzakladá automaticky)
     return json({
@@ -75,6 +76,7 @@ Deno.serve(async (req) => {
         name: (extracted.name || `${extracted.brand} ${extracted.model}`).trim(),
         brand: extracted.brand, model: extracted.model, barcode: extracted.barcode,
       },
+      usage,
     });
   } catch (e) {
     return json({ error: String(e) }, 500);
@@ -93,10 +95,11 @@ async function visionExtract(images: string[]) {
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({ model, max_tokens: 400, messages: [{ role: "user", content }] }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error("AI chyba: " + (data?.error?.message || res.status));
-  const text = data?.content?.[0]?.text || "{}";
-  return safeJson(text);
+  const d = await res.json();
+  if (!res.ok) throw new Error("AI chyba: " + (d?.error?.message || res.status));
+  const text = d?.content?.[0]?.text || "{}";
+  const usage = d?.usage ? { input_tokens: d.usage.input_tokens, output_tokens: d.usage.output_tokens, model } : null;
+  return { data: safeJson(text), usage };
 }
 function toImageBlock(dataUrl: string) {
   const m = /^data:(.*?);base64,(.*)$/s.exec(dataUrl);
