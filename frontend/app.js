@@ -164,7 +164,7 @@ const TAB_TITLE={recv:["Príjem na sklad","Naskladnenie tovaru — vyhľadaj/nas
   ship:["Zásielky","Prichádzajúce/odchádzajúce · tracking, colné, obsah, platby"],
   repairs:["Opravy a reklamácie","Servis — opravné príjemky, fotky, stavy, termíny"],
   assets:["Majetok","Firemný majetok — správca, budova/miestnosť, výpisy podľa kritérií"],
-  docs:["Doklady (príjem/výdaj)","História pohybov — kto, kedy, čo"],
+  docs:["Doklady — príjemky a výdajky","História: kto, kedy a čo prijal alebo vydal zo skladu"],
   qr:["Tlač QR kódov","Predpripravené unikátne kódy · zásobník na tlač"],
   cats:["Kategórie a tagy","Vytvárať, upravovať, presúvať, zlučovať kategórie a tagy"],
   dupes:["Duplicity","Nájsť a zlúčiť duplicitné produkty"],
@@ -1345,17 +1345,50 @@ async function pSave(id){
 }
 
 // ===== DOKLADY =====
-let docFilter="";
+let docFilter="",docQ="",docsData=[];
 async function loadDocs(){
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
-  let qy=sb.from("stock_movements").select("id,type,quantity,serial,document,purpose,via,happened_at,product_id,products(name),warehouses(name)").order("happened_at",{ascending:false}).limit(300);
-  if(docFilter==="in")qy=qy.eq("type","prijem");if(docFilter==="out")qy=qy.eq("type","vydaj");
-  const {data,error}=await qy;
-  const tabBtn=(v,l)=>`<button class="btn sm ${docFilter===v?"":"ghost"}" onclick="docFilter='${v}';loadDocs()" style="margin-right:6px">${l}</button>`;
+  const cols="id,type,quantity,serial,document,purpose,via,happened_at,product_id,warehouse_id,location_id,user_id,products(name),warehouses(name),warehouse_locations(code)";
+  let {data,error}=await sb.from("stock_movements").select(cols+",users:user_id(full_name)").order("happened_at",{ascending:false}).limit(300);
+  if(error){const r=await sb.from("stock_movements").select(cols).order("happened_at",{ascending:false}).limit(300);data=r.data;error=r.error;} // fallback bez používateľa
   if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
-  const rows=(data||[]).map(m=>{const nm=(m.products&&m.products.name)||"?";const tg=m.type==="prijem"?`<span class="tag g">príjem</span>`:m.type==="vydaj"?`<span class="tag r">výdaj</span>`:`<span class="tag b">${esc(m.type)}</span>`;
-    return `<div class="lot"><div>${tg} <b>${esc(nm)}</b> · ${m.type==="vydaj"?"−":"+"}${m.quantity} ks</div><div class="m">${esc((m.happened_at||"").replace("T"," ").slice(0,16))} · ${esc((m.warehouses&&m.warehouses.name)||"")}${m.serial?" · SN: "+esc(m.serial):""}${m.document?" · "+esc(m.document):""}${m.purpose?" · "+esc(m.purpose):""}${m.via?" · "+esc(m.via):""}</div></div>`;}).join("")||`<div class="muted">Žiadne pohyby.</div>`;
-  $("#view").innerHTML=`<div class="card"><div style="margin-bottom:10px">${tabBtn("","Všetko")}${tabBtn("in","Príjemky")}${tabBtn("out","Výdajky")}</div>${rows}</div>`;
+  docsData=data||[];renderDocs();
+}
+function renderDocs(){
+  let list=docsData.slice();
+  if(docFilter==="in")list=list.filter(m=>m.type==="prijem");else if(docFilter==="out")list=list.filter(m=>m.type==="vydaj");
+  if(docQ){const q=docQ.toLowerCase();list=list.filter(m=>(((m.products&&m.products.name)||"")+" "+(m.document||"")+" "+(m.purpose||"")+" "+(m.serial||"")+" "+((m.users&&m.users.full_name)||"")).toLowerCase().includes(q));}
+  const chip=(v,l)=>`<button class="btn sm ${docFilter===v?"":"ghost"}" style="margin-right:6px" onclick="docFilter='${v}';renderDocs()">${l}</button>`;
+  const rowH=m=>{const prijem=m.type==="prijem";const nm=(m.products&&m.products.name)||"?";
+    const wh=(m.warehouses&&m.warehouses.name)||"—";const loc=(m.warehouse_locations&&m.warehouse_locations.code)||"—";
+    const usr=(m.users&&m.users.full_name)||"—";
+    const typB=prijem?`<span class="tag g">príjem</span>`:m.type==="vydaj"?`<span class="tag r">výdaj</span>`:`<span class="tag b">${esc(m.type)}</span>`;
+    return `<tr onclick="${m.product_id?`prodDetail(${m.product_id})`:""}" style="cursor:pointer;background:${prijem?"#f1faf4":"#fdf2f2"}">
+      <td style="white-space:nowrap">${esc((m.happened_at||"").replace("T"," ").slice(0,16))}</td>
+      <td>${typB}</td>
+      <td><b>${esc(nm)}</b>${m.serial?`<div class="psub">SN: ${esc(m.serial)}</div>`:""}</td>
+      <td class="r" style="font-weight:700;color:${prijem?"#1d7d43":"#b02a26"}">${prijem?"+":"−"}${fmtNum(m.quantity)}</td>
+      <td>${esc(wh)} · ${esc(loc)}</td>
+      <td>${esc(usr)}</td>
+      <td>${m.document?esc(m.document):"—"}</td>
+      <td>${esc(m.via||"")}${m.purpose?`<div class="psub">${esc(m.purpose)}</div>`:""}</td></tr>`;};
+  const table=list.length?`<div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Dátum a čas</th><th>Typ</th><th>Produkt</th><th class="r">Množstvo</th><th>Sklad / Pozícia</th><th>Používateľ</th><th>Doklad</th><th>Spôsob / účel</th></tr></thead><tbody>${list.map(rowH).join("")}</tbody></table></div>`:`<div class="muted">Žiadne pohyby.</div>`;
+  $("#view").innerHTML=`
+  <div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
+    ${canWrite()?`<button class="btn green sm" onclick="setTab('recv')">+ Príjem</button><button class="btn red sm" onclick="setTab('issue')">− Výdaj</button>`:""}
+    <button class="btn ghost sm" onclick="docsExport()">⬇ Export (Excel/CSV)</button></div></div>
+  <div class="card">
+    <div class="toolbar"><div style="display:flex;gap:0;flex-wrap:wrap">${chip("","Všetko")}${chip("in","Príjemky")}${chip("out","Výdajky")}</div>
+      <input placeholder="Hľadať produkt / doklad / účel…" value="${esc(docQ)}" oninput="docQ=this.value;renderDocs()"></div>
+    <div class="msg" style="background:#fff8e6;color:#8a6d1a;border:1px solid #f0e2b6">Klikni na riadok pre detail · Modul dokladov/faktúr sa doplní neskôr — zatiaľ sa zadáva ako text.</div>
+    ${table}</div>`;
+}
+function docsExport(){
+  const head=["Dátum a čas","Typ","Produkt","Množstvo","Sklad","Pozícia","Používateľ","Doklad","Spôsob","Účel","SN"];
+  const cell=v=>{v=v==null?"":String(v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const rows=docsData.map(m=>[(m.happened_at||"").replace("T"," ").slice(0,16),m.type,(m.products&&m.products.name)||"",(m.type==="vydaj"?"-":"+")+m.quantity,(m.warehouses&&m.warehouses.name)||"",(m.warehouse_locations&&m.warehouse_locations.code)||"",(m.users&&m.users.full_name)||"",m.document||"",m.via||"",m.purpose||"",m.serial||""].map(cell).join(";"));
+  const csv="﻿"+head.join(";")+"\n"+rows.join("\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download="doklady_"+new Date().toISOString().slice(0,10)+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 
 // ===== ZÁSIELKY =====
