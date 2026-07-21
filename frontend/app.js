@@ -620,7 +620,7 @@ function renderStock(){
       const posCell=l.status==="na_ceste"?`<span class="tag o">doručuje sa</span>${l.expected_date?` <span class="psub">→ ${esc(String(l.expected_date).slice(0,10))}</span>`:""}`:esc(loc);
       const rowbg=l.status==="na_ceste"?"background:#fff6e9":"background:#faf7f0";
       body+=`<tr style="${rowbg}">
-        <td style="padding-left:3mm"><input type="checkbox" ${stockSel[l.id]?"checked":""} onclick="selLot(${l.id},this.checked)"></td>
+        <td style="padding-left:6mm"><input type="checkbox" ${stockSel[l.id]?"checked":""} onclick="selLot(${l.id},this.checked)"></td>
         <td class="psub" style="padding-left:26px;white-space:nowrap">↳ <span style="cursor:pointer" onclick="lotEdit(${l.id})">${l.track==="unit"?"kus":"množstvo"}</span>${l.serial?" · SN: "+esc(l.serial)+copyBtn(l.serial):""}${l.qr_code?" · "+esc(l.qr_code)+copyBtn(l.qr_code):""}${l.state_note?" · "+esc(l.state_note):""}</td>
         <td>${whChip(l)}</td><td>${posCell}</td><td class="r">${fmtNum(l.quantity)} ${l.track==="unit"?"kus":"ks"}</td><td>${stateBadges(l)}</td><td>${buy}</td>
         <td style="white-space:nowrap">${canWrite()?`${l.status==="na_ceste"?`<button class="btn red sm" disabled title="Zásielka sa ešte doručuje — vydať sa dá až po prijatí na sklad" style="opacity:.4;cursor:not-allowed">Výdaj</button>`:`<button class="btn red sm" onclick="lotIssue(${l.id})">Výdaj</button>`} <button class="btn ghost sm" onclick="lotEdit(${l.id})">Upraviť</button>`:""}</td></tr>`;});}
