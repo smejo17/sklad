@@ -509,7 +509,7 @@ async function renderIssue(){
   issueSel=null;
   $("#view").innerHTML=`<div class="card"><h2>Výdaj</h2>
     <label>Odkiaľ vydávaš?</label>
-    <div class="inline" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn red sm" onclick="setTab('issue')">🏬 Zo skladu</button><button class="btn ghost sm" onclick="repKind='oprava';setTab('repairs')">🛠️ Z opravy</button><button class="btn ghost sm" onclick="repKind='reklamacia';setTab('repairs')">⚠️ Z reklamácie</button></div>
+    <div class="inline" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn red sm" onclick="setTab('issue')">🏬 Zo skladu</button><button class="btn ghost sm" onclick="repKind='oprava';setTab('repairs')">🛠️ Z opravy</button><button class="btn ghost sm" onclick="repKind='reklamacia';setTab('repairs')">⚠️ Z reklamácie</button><button class="btn ghost sm" data-tip="Vydať tovar do majetku — naskenuj jeho QR a priraď osobe/miestnosti" onclick="setTab('assets');setTimeout(assetScanFromStock,150)">🖥️ Do majetku</button></div>
     <hr style="border:0;border-top:1px solid var(--line);margin:6px 0 10px">
     <div class="inline" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
       <div>Aktuálna výdajka: <b class="mono" id="curdoc">${currentIssueDoc?esc(currentIssueDoc):"— (pridelí sa pri prvom výdaji)"}</b></div>
@@ -2726,7 +2726,7 @@ async function repairReceipt(id){
 }
 
 // ===== MAJETOK (firemný majetok používaný na prácu) =====
-let assetQ="",assetGroup="person",assetFPremise="",assetFPerson="",assetPhoto="",assetPrefill=null,assetAssign="none";
+let assetQ="",assetGroup="person",assetFPremise="",assetFPerson="",assetFRoom="",assetPhoto="",assetPrefill=null,assetAssign="none";
 const ASSET_STATE={new:["nové","g"],used:["používané","b"],broken:["pokazené","r"]};
 function assetName(a){return a.name||((DATA.products.find(p=>p.id===a.product_id)||{}).name)||"(bez názvu)";}
 function assetAssignHtml(a){
@@ -2745,6 +2745,7 @@ function renderAssets(){
     let list=data||[];
     if(assetFPremise)list=list.filter(a=>String(a.premise_id||"")===assetFPremise||String((DATA.rooms.find(r=>r.id===a.room_id)||{}).premise_id||"")===assetFPremise);
     if(assetFPerson)list=list.filter(a=>String(a.person_id||"")===assetFPerson);
+    if(assetFRoom)list=list.filter(a=>String(a.room_id||"")===assetFRoom);
     if(assetQ){const q=assetQ.toLowerCase();list=list.filter(a=>((assetName(a))+" "+(a.serial||"")+" "+(a.qr_code||"")+" "+(personName(a.person_id)||"")+" "+(roomName(a.room_id)||"")+" "+(premiseName(a.premise_id)||"")+" "+(a.holder||"")+" "+(a.room||"")+" "+(a.note||"")).toLowerCase().includes(q));}
     const stTag=s=>{const m=ASSET_STATE[s]||[s||"—",""];return `<span class="tag ${m[1]}">${esc(m[0])}</span>`;};
     const rowH=a=>`<tr onclick="assetDetail(${a.id})" style="cursor:pointer">
@@ -2766,14 +2767,15 @@ function renderAssets(){
       <div class="inline" style="gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div><b style="font-size:15px">Majetok</b> <span class="muted" style="font-size:12px">${list.length} položiek</span></div>
         <div class="inline" style="gap:6px;flex-wrap:wrap">
-          ${canWrite()?`<button class="btn green sm" onclick="assetForm(0)">+ Nový majetok</button><button class="btn sm" onclick="assetPickFromStock()">📦 Zo skladu</button><button class="btn ghost sm" onclick="renderAssetAdmin()">🏢 Evidencia</button>`:""}
+          ${canWrite()?`<button class="btn green sm" onclick="assetForm(0)">+ Nový majetok</button><button class="btn sm" onclick="assetScanFromStock()">📷 Sken QR tovaru</button><button class="btn ghost sm" onclick="assetPickFromStock()">📦 Zo skladu</button><button class="btn ghost sm" onclick="renderAssetAdmin()">🏢 Evidencia</button>`:""}
           <button class="btn ghost sm" onclick="assetExport()">⬇ Export</button></div>
       </div>
       <div style="border-top:1px solid var(--line-2);margin-bottom:8px"></div>
       <div class="toolbar"><input id="assetQ" placeholder="Hľadať (názov / SN / QR / osoba / miestnosť)…" value="${esc(assetQ)}" oninput="assetQ=this.value;searchInput('assetQ',renderAssets)" style="flex:2 1 220px">
         <select onchange="assetGroup=this.value;renderAssets()">${gsel("person","Zoskupiť: osoba")}${gsel("room","Zoskupiť: miestnosť")}${gsel("premise","Zoskupiť: provozovňa")}${gsel("none","Bez zoskupenia")}</select>
         <select onchange="assetFPremise=this.value;renderAssets()"><option value="">Provozovňa (všetky)</option>${DATA.premises.map(pr=>`<option value="${pr.id}" ${assetFPremise==String(pr.id)?"selected":""}>${esc(pr.name)}</option>`).join("")}</select>
-        <select onchange="assetFPerson=this.value;renderAssets()"><option value="">Osoba (všetky)</option>${DATA.persons.map(pe=>`<option value="${pe.id}" ${assetFPerson==String(pe.id)?"selected":""}>${esc(pe.name)}${pe.active===false?" (ukončený)":""}</option>`).join("")}</select></div>
+        <select onchange="assetFPerson=this.value;renderAssets()"><option value="">Osoba (všetky)</option>${DATA.persons.map(pe=>`<option value="${pe.id}" ${assetFPerson==String(pe.id)?"selected":""}>${esc(pe.name)}${pe.active===false?" (ukončený)":""}</option>`).join("")}</select>
+        <select onchange="assetFRoom=this.value;renderAssets()"><option value="">Miestnosť (všetky)</option>${DATA.rooms.map(rm=>`<option value="${rm.id}" ${assetFRoom==String(rm.id)?"selected":""}>${esc(rm.name)} · ${esc(premiseName(rm.premise_id))}</option>`).join("")}</select></div>
     </div>
     ${sections}`;
     restoreSearchFocus();
@@ -2899,11 +2901,20 @@ async function assetPickFromStock(){
     <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Produkt</th><th>Sklad</th><th>Množstvo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 async function assetFromLot(lotId){
-  const {data:l}=await sb.from("stock_lots").select("id,product_id,serial").eq("id",lotId).single();
+  const {data:l}=await sb.from("stock_lots").select("id,product_id,serial,qr_code").eq("id",lotId).single();
   if(!l)return;const p=DATA.products.find(x=>x.id===l.product_id)||{};
-  assetPrefill={product_id:l.product_id,_prodName:p.name||"",serial:l.serial||null,source_lot:l.id,state:"used"};
+  assetPrefill={product_id:l.product_id,_prodName:p.name||"",serial:l.serial||null,qr_code:l.qr_code||null,source_lot:l.id,state:"used"};
   assetForm(0);
 }
+// odobrať tovar zo skladu do majetku naskenovaním jeho QR/SN (tovar má QR — po prevode ostáva na majetku)
+function assetScanFromStock(){openScan(async code=>{
+  const c=String(code||"").trim();if(!c)return;
+  const {data}=await sb.from("stock_lots").select("id,product_id,serial,qr_code,status").or("qr_code.eq."+c+",serial.eq."+c).limit(1);
+  const lot=data&&data[0];
+  if(!lot){alert("Tovar s kódom „"+c+"“ sa na sklade nenašiel.");return;}
+  if(lot.status==="na_ceste"){alert("Tento tovar sa ešte doručuje — nedá sa presunúť do majetku.");return;}
+  assetFromLot(lot.id);
+},{qr:true});}
 // ===== DETAIL MAJETKU =====
 async function assetDetail(id){navHash("assets/"+id);
   const {data:a,error}=await sb.from("assets").select("*").eq("id",id).single();
