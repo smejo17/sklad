@@ -486,7 +486,7 @@ async function renderIssue(){
     <div class="card"><h4>História výdajok</h4><div id="issueHist" class="muted">Načítavam…</div></div>`;
   // načítaj zásoby do pamäte pre hľadanie
   const {data}=await sb.from("stock_lots").select("id,quantity,track,serial,qr_code,status,product_id,warehouse_id,location_id,products(name),warehouses(name),warehouse_locations(code)").order("id",{ascending:false}).limit(1000);
-  issueLots=data||[];iSearch();loadIssueHistory();
+  issueLots=(data||[]).filter(l=>l.status!=="na_ceste");iSearch();loadIssueHistory();
   if(issuePreselect){const pid=issuePreselect;issuePreselect=null;if(issueLots.find(x=>x.id===pid))iPick(pid);}
 }
 async function loadIssueHistory(){
@@ -590,7 +590,7 @@ function renderStock(){
   let body="";
   keys.forEach(k=>{const ls=g[k];const p=prodOf(Number(k));const nm=(ls[0].products&&ls[0].products.name)||p.name||"?";
     const tot=ls.reduce((s,l)=>s+(+l.quantity||0),0);
-    const th=p.image_url?`<span class="zoomwrap"><img class="pimg" src="${esc(p.image_url)}"><img class="zoombig" src="${esc(p.image_url)}"></span>`:`<div class="pimg" style="background:#eef1f6"></div>`;
+    const th=p.image_url?`<span class="zoomwrap"><img class="pimg" src="${esc(p.image_url)}"><img class="zoombig" src="${esc(p.image_url)}"></span>`:`<div class="pimg" style="background:var(--bg-2)"></div>`;
     const inStock=ls.filter(l=>l.status!=="na_ceste");const onWayLots=ls.filter(l=>l.status==="na_ceste");
     const whIds=uniq(inStock.map(l=>l.warehouse_id).filter(x=>x!=null));
     let whChips=whIds.map(wid=>{const l=inStock.find(x=>x.warehouse_id===wid);return whChip(l);}).join(" ");
@@ -616,7 +616,7 @@ function renderStock(){
         <td style="padding-left:3mm"><input type="checkbox" ${stockSel[l.id]?"checked":""} onclick="selLot(${l.id},this.checked)"></td>
         <td class="psub" style="padding-left:26px">↳ <span style="cursor:pointer" onclick="lotEdit(${l.id})">${l.track==="unit"?"kus":"množstvo"}</span>${l.serial?" · SN: "+esc(l.serial)+copyBtn(l.serial):""}${l.qr_code?" · "+esc(l.qr_code)+copyBtn(l.qr_code):""}${l.state_note?" · "+esc(l.state_note):""}</td>
         <td>${whChip(l)}</td><td>${posCell}</td><td class="r">${fmtNum(l.quantity)} ${l.track==="unit"?"kus":"ks"}</td><td>${stateBadges(l)}</td><td>${buy}</td>
-        <td style="white-space:nowrap">${canWrite()?`<button class="btn red sm" onclick="lotIssue(${l.id})">Výdaj</button> <button class="btn ghost sm" onclick="lotEdit(${l.id})">Upraviť</button>`:""}</td></tr>`;});}
+        <td style="white-space:nowrap">${canWrite()?`${l.status==="na_ceste"?`<button class="btn red sm" disabled title="Zásielka sa ešte doručuje — vydať sa dá až po prijatí na sklad" style="opacity:.4;cursor:not-allowed">Výdaj</button>`:`<button class="btn red sm" onclick="lotIssue(${l.id})">Výdaj</button>`} <button class="btn ghost sm" onclick="lotEdit(${l.id})">Upraviť</button>`:""}</td></tr>`;});}
   });
   const table=keys.length?`<div class="ptbl-wrap"><table class="ptbl"><thead><tr><th></th><th>Produkt</th><th>Sklad</th><th>Pozícia</th><th class="r">Množstvo (+na ceste/−rez.)</th><th>Stav</th><th>Nákup (cena / dátum / faktúra)</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`:`<div class="muted">Žiadne zásoby pre daný filter.</div>`;
   const totKs=lots.reduce((s,l)=>s+(+l.quantity||0),0);const selCount=allLotIds.filter(id=>stockSel[id]).length;
@@ -699,28 +699,35 @@ async function bulkCounted(){const ids=selectedLotIds();if(!ids.length)return;
   if(error){alert(error.message);return;}stockSel={};await loadStock();}
 // hromadný výdaj — jedna výdajka, viac tovarov naraz
 function bulkIssue(){const ids=selectedLotIds();if(!ids.length)return;
-  const items=ids.map(id=>stockLots.find(l=>l.id===id)).filter(Boolean);
+  const all=ids.map(id=>stockLots.find(l=>l.id===id)).filter(Boolean);
+  const onWay=all.filter(l=>l.status==="na_ceste").length;
+  const items=all.filter(l=>l.status!=="na_ceste");
+  if(!items.length){alert("Všetky vybrané položky sa ešte doručujú (na ceste) — vydať sa dajú až po prijatí na sklad.");return;}
+  const skipNote=onWay?`<div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">${onWay} položiek sa doručuje (na ceste) — tie sa nevydajú.</div>`:"";
   const list=items.map(l=>`<div class="lot">${esc((l.products&&l.products.name)||prodOf(l.product_id).name||"?")} · ${fmtNum(l.quantity)} ks${l.serial?" · SN "+esc(l.serial):""}</div>`).join("");
   openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Výdaj — ${items.length} položiek</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
     <div class="muted">Vytvorí sa jedna výdajka pre všetky vybrané tovary (vydá sa celé množstvo šarže).</div>
+    ${skipNote}
     <div style="max-height:220px;overflow:auto;margin:8px 0">${list}</div>
     <label>Spôsob</label><select id="bi_via"><option value="fyzicky">fyzicky</option><option value="zasielkou">zásielkou</option></select>
     <label>Dôvod výdaja</label><input id="bi_reason" list="reasonList" placeholder="predaj / presun / likvidácia…"><datalist id="reasonList">${REASONS.map(r=>`<option>${esc(r)}</option>`).join("")}</datalist>
     <label>Doklad / objednávka</label><input id="bi_doc" placeholder="OBJ-…">
     <div style="text-align:right;margin-top:14px"><button class="btn red" style="width:auto" onclick="bulkIssueDo()">Vydať zo skladu</button></div>`);
 }
-async function bulkIssueDo(){const ids=selectedLotIds();const items=ids.map(id=>stockLots.find(l=>l.id===id)).filter(Boolean);
+async function bulkIssueDo(){const ids=selectedLotIds();const items=ids.map(id=>stockLots.find(l=>l.id===id)).filter(Boolean).filter(l=>l.status!=="na_ceste");
+  if(!items.length){alert("Niet čo vydať — vybrané položky sa ešte doručujú.");return;}
+  const issueIds=items.map(l=>l.id);
   const via=$("#bi_via").value,reason=$("#bi_reason").value.trim()||null,doc=$("#bi_doc").value.trim()||null;
   const mv=items.map(l=>({type:"vydaj",product_id:l.product_id,lot_id:l.id,quantity:l.quantity,warehouse_id:l.warehouse_id,location_id:l.location_id,via,document:doc,purpose:reason,serial:l.serial}));
   const {error}=await sb.from("stock_movements").insert(mv);
   if(error){alert(error.message);return;}
-  await sb.from("stock_lots").delete().in("id",ids);
+  await sb.from("stock_lots").delete().in("id",issueIds);
   closeModal();stockSel={};await loadStock();
   $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Vydané ${items.length} položiek na jednej výdajke${doc?" ("+esc(doc)+")":""}.</div>`);
 }
 // výdaj konkrétnej šarže
 let issuePreselect=null;
-function lotIssue(id){issuePreselect=id;setTab("issue");}
+function lotIssue(id){const l=stockLots.find(x=>x.id===id);if(l&&l.status==="na_ceste"){alert("Táto zásoba sa ešte doručuje (na ceste). Vydať ju možno až po prijatí na sklad.");return;}issuePreselect=id;setTab("issue");}
 // naskenuj QR / sériové číslo a otvor príslušnú položku na sklade (úprava stavu/popisu, parametre)
 function stockScanFind(){openScan(code=>{
   const c=String(code||"").trim().toLowerCase();if(!c)return;
@@ -1030,7 +1037,7 @@ function renderProds(){
   const preTag=DATA.products.filter(inCatFilter).filter(p=>!pf.brand||String(p.brand_id)===pf.brand).filter(p=>{if(!pf.q)return true;const q=pf.q.toLowerCase();return((p.name||"")+" "+brandName(p)+" "+(p.model||"")+" "+(p.sku||"")+" "+catPathText(p.category_id)+" "+productTagNames(p.id).join(" ")).toLowerCase().includes(q);});
   const presentTagIds=new Set();preTag.forEach(p=>productTagIds(p.id).forEach(id=>presentTagIds.add(id)));
   const tagChips=DATA.tags.filter(t=>presentTagIds.has(t.id)||String(t.id)===pf.tag).sort((a,b)=>a.name.localeCompare(b.name)).map(t=>tagChip(t,String(t.id)===pf.tag,`pf.tag=(pf.tag==='${t.id}'?'':'${t.id}');saveFilters();renderProds()`)).join("")||`<span class="muted" style="font-size:12px">žiadne tagy</span>`;
-  const trs=list.slice(0,300).map(p=>{const th=p.image_url?`<img class="pimg" src="${esc(p.image_url)}">`:`<div class="pimg" style="background:#eef1f6"></div>`;
+  const trs=list.slice(0,300).map(p=>{const th=p.image_url?`<span class="zoomwrap"><img class="pimg" src="${esc(p.image_url)}"><img class="zoombig" src="${esc(p.image_url)}"></span>`:`<div class="pimg" style="background:var(--bg-2)"></div>`;
     const tags=productTagNames(p.id).map(t=>{const c=tagColor(t);return `<span class="tag" style="background:${c[0]};color:${c[1]}">#${esc(t)}</span>`;}).join(" ");
     const asm=(p.type==="assembly"||p.is_assembly)?`<span class="tag o">zostava</span>`:"";
     return `<tr>
@@ -1759,6 +1766,8 @@ async function shipDetail(id){navHash("ship/"+id);
     ${row("Prepravca",s.carrier)}
     <div class="lot"><div class="m">Smer (určený automaticky z adries)</div><b>${dirBadge(s.direction)} ${esc((DIRS[s.direction]||["",""])[0])}</b></div>
     ${row("Stav",s.status)}
+    ${row("Vytvorené (podľa dopravcu)",s.label_date?String(s.label_date).slice(0,10):"")}
+    ${row("Pridané do systému",s.created_at?String(s.created_at).slice(0,10):"")}
     ${row("Odosielateľ / dodávateľ",s.sender)}${row("Odkiaľ (adresa)",s.from_address)}${row("Doručiť kam",s.to_address)}
     ${row("Objednávka",[s.our_order,s.order_source].filter(Boolean).join(" · "))}${row("Predpokladané doručenie",s.expected_date?String(s.expected_date).slice(0,10):"")}${row("Prijaté dňa",s.received_on?String(s.received_on).slice(0,10):"")}${row("Obsah (poznámka)",s.contents)}
     ${row("Dodacia podmienka (incoterm)",s.incoterm)}${row("Cena prepravy (platíme my)",s.ship_cost?s.ship_cost+" "+(s.ship_cost_cur||""):"")}${row("Poistná suma",s.insured_value?s.insured_value+" "+(s.insured_cur||""):"")}
@@ -1855,8 +1864,8 @@ async function shipUpsTrack(id){
     if(msg)msg.innerHTML=`<div class="msg err">${esc(cf.name)} sledovanie zlyhalo.<br>Detail: ${esc(String(detail))}<br><span class="muted">Skontroluj: 1) funkcia <b>${esc(cf.fn)}</b> je nasadená, 2) secrets <b>${esc(carrierSecrets(cf.name))}</b>, 3) prepravca má povolené Tracking API.</span></div>`;return;}
   const upd={status:data.status||null,tracking_json:data,tracking_at:new Date().toISOString()};
   const pd=data.pod||{};
-  const fromA=[pd.shipFromName,pd.shipFromAddr].filter(Boolean).join(", ");
-  const toA=[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ");
+  const fromA=[pd.shipFromName,pd.shipFromAddr].filter(Boolean).join(", ")||data.from||"";
+  const toA=[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ")||data.to||"";
   if(fromA)upd.from_address=fromA;
   if(toA)upd.to_address=toA;
   if(pd.shipFromName)upd.sender=pd.shipFromName;
@@ -1868,7 +1877,9 @@ async function shipUpsTrack(id){
   if(fromUs&&!toUs)upd.direction="outbound";else if(toUs&&!fromUs)upd.direction="inbound";
   // dobierka (C.O.D.) — ak doručené a je COD, ber ako zaplatené
   if(data.cod){upd.customer_payment="dobierka "+data.cod;if(data.delivered){upd.is_paid=true;upd.paid_where="dobierka (prepravca)";}}
-  if(pd.labelDate)upd.label_date=String(pd.labelDate).slice(0,10);
+  // dátum vytvorenia zásielky u dopravcu (štítok/podanie) — ak ho tracking pozná
+  const created=pd.labelDate||data.labelDate||data.created||"";
+  if(created)upd.label_date=String(created).replace(" ","T").slice(0,10);
   await sb.from("shipments").update(upd).eq("id",id);
   const act=(data.activity||[]).map(a=>`<div class="lot"><div class="m">${esc(a.date||"")}${a.location?" · "+esc(a.location):""}</div>${esc(a.status||"")}</div>`).join("");
   const info=(l,v)=>v?`<div class="lot"><div class="m">${esc(l)}</div><b>${esc(v)}</b></div>`:"";

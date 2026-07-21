@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Tovar">
+  <rect width="200" height="200" rx="14" fill="#f4f1ea"/>
+  <path d="M100 46l50 28v52l-50 28-50-28V74z" fill="#3a3530" stroke="#211d18" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M50 74l50 28 50-28M100 102v54" fill="none" stroke="#8f8577" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M75 60l50 28v18l-50-28z" fill="#b9641b" opacity="0.9"/>
+</svg>

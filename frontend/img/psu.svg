@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Napájací zdroj">
+  <rect width="200" height="200" rx="14" fill="#f4f1ea"/>
+  <rect x="46" y="58" width="108" height="84" rx="8" fill="#3a3530" stroke="#211d18" stroke-width="2"/>
+  <circle cx="100" cy="100" r="30" fill="#211d18" stroke="#8f8577" stroke-width="2"/>
+  <g stroke="#b9641b" stroke-width="3.4" stroke-linecap="round" fill="none">
+    <circle cx="100" cy="100" r="30" stroke="#2c2721" stroke-width="3.4"/>
+    <path d="M100 82v18M100 100l13 9M100 100l-13 9"/>
+  </g>
+  <path d="M104 88l-9 15h10l-9 13" stroke="#d9822b" stroke-width="3.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="52" y="64" width="12" height="12" rx="2" fill="#6f665a"/>
+</svg>

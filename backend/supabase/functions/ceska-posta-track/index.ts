@@ -42,9 +42,17 @@ Deno.serve(async (req) => {
       location: [s.postoffice, s.postcode].filter(Boolean).join(", "),
     }));
     const last = states[states.length - 1] || {};
+    const first = states[0] || {};
     const delState = states.filter((s) => isDelivered(s.text)).pop();
     const delivered = !!delState;
     const cod = at.dobirka && Number(at.dobirka) > 0 ? (Number(at.dobirka) + " " + (at.currency || "CZK")) : "";
+    // dátum vytvorenia = prvá (najstaršia) udalosť = podanie zásielky
+    const created = first.date || "";
+    // odkiaľ / kam — krajina (pri medzinárodných) alebo podacia/cieľová pošta (pri vnútroštátnych)
+    const originPost = [first.postoffice, first.postcode].filter(Boolean).join(", ");
+    const destPost = [last.postoffice, last.postcode].filter(Boolean).join(", ");
+    const fromTxt = at.zemePuvodu || originPost || "";
+    const toTxt = at.zemeUrceni || destPost || "";
     return json({
       found: true,
       carrier: "Česká pošta",
@@ -52,10 +60,14 @@ Deno.serve(async (req) => {
       delivered,
       deliveredAt: delState ? (delState.date || null) : null,
       eta: at.dorucovaniDate || null,
+      created,            // dátum vytvorenia/podania zásielky (prvá udalosť)
+      labelDate: created, // alias — appka ho uloží ako "vytvorené"
       weight: at.weight && Number(at.weight) > 0 ? (at.weight + " kg") : "",
       cod,
-      from: at.zemePuvodu || "",
-      to: at.zemeUrceni || "",
+      from: fromTxt,
+      to: toTxt,
+      originPost,
+      destPost,
       pieces: at.kusu || null,
       storedUntil: at.ulozeniDo || null,
       activity,

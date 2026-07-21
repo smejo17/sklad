@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Riadiaca doska">
+  <rect width="200" height="200" rx="14" fill="#f4f1ea"/>
+  <rect x="40" y="52" width="120" height="96" rx="8" fill="#2f5d3f" stroke="#1f6d43" stroke-width="2"/>
+  <rect x="56" y="70" width="34" height="34" rx="3" fill="#211d18"/>
+  <g stroke="#d9822b" stroke-width="2">
+    <path d="M56 78h-10M56 86h-10M56 94h-10M90 78h10M90 86h10M90 94h10"/>
+  </g>
+  <rect x="112" y="70" width="30" height="20" rx="3" fill="#3a3530"/>
+  <g fill="#b9641b"><circle cx="120" cy="116" r="5"/><circle cx="136" cy="116" r="5"/><circle cx="120" cy="132" r="5"/><circle cx="136" cy="132" r="5"/></g>
+  <g fill="#e3c398"><rect x="52" y="116" width="40" height="6" rx="3"/><rect x="52" y="128" width="30" height="6" rx="3"/></g>
+</svg>

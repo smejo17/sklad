@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Grafická karta">
+  <rect width="200" height="200" rx="14" fill="#f4f1ea"/>
+  <rect x="34" y="66" width="132" height="70" rx="8" fill="#3a3530" stroke="#211d18" stroke-width="2"/>
+  <circle cx="76" cy="101" r="21" fill="#211d18" stroke="#8f8577" stroke-width="2"/>
+  <circle cx="130" cy="101" r="21" fill="#211d18" stroke="#8f8577" stroke-width="2"/>
+  <g stroke="#b9641b" stroke-width="3" stroke-linecap="round">
+    <path d="M76 101l0-13M76 101l11 7M76 101l-11 7"/>
+    <path d="M130 101l0-13M130 101l11 7M130 101l-11 7"/>
+  </g>
+  <circle cx="76" cy="101" r="3.5" fill="#d9822b"/>
+  <circle cx="130" cy="101" r="3.5" fill="#d9822b"/>
+  <rect x="44" y="136" width="10" height="16" rx="2" fill="#6f665a"/>
+  <rect x="70" y="136" width="10" height="16" rx="2" fill="#6f665a"/>
+  <rect x="96" y="136" width="10" height="16" rx="2" fill="#6f665a"/>
+</svg>

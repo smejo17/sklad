@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="ASIC miner">
+  <rect width="200" height="200" rx="14" fill="#f4f1ea"/>
+  <rect x="42" y="52" width="116" height="96" rx="8" fill="#3a3530" stroke="#211d18" stroke-width="2"/>
+  <rect x="52" y="60" width="96" height="34" rx="4" fill="#211d18"/>
+  <circle cx="76" cy="77" r="12" fill="#2c2721" stroke="#b9641b" stroke-width="3"/>
+  <circle cx="124" cy="77" r="12" fill="#2c2721" stroke="#b9641b" stroke-width="3"/>
+  <path d="M76 77l6-6M76 77l-6 6M124 77l6-6M124 77l-6 6" stroke="#8f8577" stroke-width="2" stroke-linecap="round"/>
+  <g fill="#6f665a">
+    <rect x="54" y="104" width="92" height="5" rx="2.5"/>
+    <rect x="54" y="114" width="92" height="5" rx="2.5"/>
+    <rect x="54" y="124" width="92" height="5" rx="2.5"/>
+    <rect x="54" y="134" width="60" height="5" rx="2.5"/>
+  </g>
+  <rect x="128" y="132" width="18" height="9" rx="2" fill="#2f8858"/>
+</svg>
