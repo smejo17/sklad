@@ -155,13 +155,14 @@ async function cropApply(){
 }
 
 // ===== TABY =====
-const TABS=["recv","issue","stock","prods","ship","repairs","assets","docs","qr","cats","dupes","admin"];
+const TABS=["recv","issue","stock","prods","ship","ship2","repairs","assets","docs","qr","cats","dupes","admin"];
 const ADMIN_TABS=["cats","dupes","admin"];
 const TAB_TITLE={recv:["Príjem na sklad","Naskladnenie tovaru — vyhľadaj/naskenuj produkt a prijmi"],
   issue:["Výdaj zo skladu","Vyskladnenie — nájdi položku cez QR / SN / názov"],
   stock:["Zásoby","Stav skladu · triedenie do kategórií, tagy, obrázky, fotky"],
   prods:["Produkty","Katalóg · značka, kategórie, parametre podľa kategórie · kontrola duplicít"],
   ship:["Zásielky","Prichádzajúce/odchádzajúce · tracking, colné, obsah, platby"],
+  ship2:["Zásielky 2 — nový vzhľad","Skúšobný vzhľad podľa trackovacích agregátorov (17TRACK/4Trackit) · na porovnanie"],
   repairs:["Opravy a reklamácie","Servis — opravné príjemky, fotky, stavy, termíny"],
   assets:["Majetok","Firemný majetok — správca, budova/miestnosť, výpisy podľa kritérií"],
   docs:["Doklady — príjemky a výdajky","História: kto, kedy a čo prijal alebo vydal zo skladu"],
@@ -169,7 +170,7 @@ const TAB_TITLE={recv:["Príjem na sklad","Naskladnenie tovaru — vyhľadaj/nas
   cats:["Kategórie a tagy","Vytvárať, upravovať, presúvať, zlučovať kategórie a tagy"],
   dupes:["Duplicity","Nájsť a zlúčiť duplicitné produkty"],
   admin:["Správa","Sklady, pozície, role a používatelia"]};
-const RENDER={recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProds,ship:renderShip,repairs:renderRepairs,assets:renderAssets,docs:loadDocs,qr:renderQR,cats:renderCats,dupes:renderDupes,admin:renderSettings};
+const RENDER={recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProds,ship:renderShip,ship2:renderShip2,repairs:renderRepairs,assets:renderAssets,docs:loadDocs,qr:renderQR,cats:renderCats,dupes:renderDupes,admin:renderSettings};
 // len zvýrazní tab + hlavičku (bez vykreslenia obsahu)
 function markTab(t){tab=t;
   TABS.forEach(x=>{const b=$("#tab_"+x);if(b)b.classList.toggle("on",x===t);const n=$("#nav_"+x);if(n)n.classList.toggle("on",x===t);});
@@ -178,7 +179,7 @@ function setTab(t){markTab(t);$("#view").className="";RENDER[t]();navHash(t);}
 
 // ===== ROUTING (hash v adrese — zdieľateľné odkazy + tlačidlá Späť/Vpred) =====
 // taby: #stock ; detail: #ship/123 , #prods/45 , #repairs/7 , #assets/3
-const DETAIL={ship:shipDetail,prods:prodDetail,repairs:repairDetail,assets:assetDetail};
+const DETAIL={ship:shipDetail,ship2:ship2Detail,prods:prodDetail,repairs:repairDetail,assets:assetDetail};
 let _routeLock=false;
 // nastaví adresu bez zacyklenia (hashchange sa preskočí, ak zmenu vyvolala appka)
 function navHash(h){if(("#"+h)!==location.hash){_routeLock=true;location.hash=h;}}
@@ -1456,6 +1457,159 @@ function shipStatusCell(s){const low=(s.status||"").toLowerCase();let cls="b";if
   const closed=shipClosed(s);
   return `<span class="tag ${cls}">${esc(s.status||"—")}</span><div style="margin-top:3px"><span class="tag ${closed?"g":"o"}">${closed?"uzavreté":"sledovať"}</span></div>`;}
 function renderShip(){shipMode="list";shipList();}
+// ===== ZÁSIELKY 2 — skúšobný vzhľad podľa trackovacích agregátorov (17TRACK/4Trackit) =====
+let ship2Q="",ship2Dir="";
+function ship2CarrierStyle(name){return {"UPS":["#5a3410","#fff","UPS"],"FedEx":["#4d148c","#fff","FedEx"],"DHL Express":["#d40511","#ffcc00","DHL"],"DHL Freight":["#d40511","#ffcc00","DHL"],"GLS":["#061ab1","#ffd100","GLS"],"Balíkovna":["#e2001a","#ffdd00","BAL"],"Česká pošta":["#e2001a","#ffdd00","ČP"]}[name]||["#2a2621","#d9822b","?"];}
+const SHIP2_STEPS=["Podané","Na ceste","Doručené"];
+function ship2Cur(s){return Math.min(shipStageRank(s),2);}
+const SHIP2_CSS=`<style id="ship2css">
+.s2{max-width:1100px}
+.s2 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.s2 .ccard{background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow);padding:13px;cursor:pointer;transition:border-color .12s}
+.s2 .ccard:hover{border-color:var(--blue)}
+.s2 .clogo{width:40px;height:29px;border-radius:6px;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 40px}
+.s2 .tn{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:600}
+.s2 .tnl{font-size:10.5px;color:var(--grey);text-transform:uppercase;letter-spacing:.04em}
+.s2 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px}
+.s2 .pill .d{width:6px;height:6px;border-radius:50%}
+.s2 .pill.info{background:#e4edf6;color:#2b537d}.s2 .pill.in{background:var(--in-bg);color:var(--in-tx)}
+.s2 .pill.warn{background:var(--warn-bg);color:var(--warn-tx)}.s2 .pill.mut{background:var(--bg-2);color:var(--grey)}
+.s2 .eta{font-size:12px;color:var(--grey)}.s2 .eta b{color:var(--dark);font-size:14px;font-variant-numeric:tabular-nums}
+.s2 .step{display:flex;align-items:center;margin:12px 0 4px}
+.s2 .step .s{flex:1;text-align:center;position:relative;font-size:10px;color:var(--grey);font-weight:600}
+.s2 .step .s .dot{width:13px;height:13px;border-radius:50%;background:var(--bg-2);border:2px solid var(--line-2);margin:0 auto 5px;position:relative;z-index:1}
+.s2 .step .s.done .dot{background:var(--green);border-color:var(--green)}
+.s2 .step .s.now .dot{background:var(--blue);border-color:var(--blue);box-shadow:0 0 0 4px var(--acc-soft)}
+.s2 .step .s.done{color:var(--in-tx)}.s2 .step .s.now{color:var(--blue)}
+.s2 .step .s::before{content:"";position:absolute;top:6px;left:-50%;width:100%;height:2px;background:var(--line-2);z-index:0}
+.s2 .step .s:first-child::before{display:none}
+.s2 .step .s.done::before,.s2 .step .s.now::before{background:var(--green)}
+.s2 .route{display:flex;align-items:center;gap:8px;font-size:12px;margin:6px 0}
+.s2 .route .p{font-weight:600}.s2 .route .ar{flex:1;height:1px;background:var(--line-2);position:relative}
+.s2 .route .ar::after{content:"→";position:absolute;right:-3px;top:-9px;color:var(--blue)}
+.s2 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:12px}
+.s2 .mgrid .m{background:var(--card);padding:9px 12px}
+.s2 .mgrid .m .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--grey);font-weight:600}
+.s2 .mgrid .m .v{font-size:13px;font-weight:600;margin-top:2px}
+.s2 .tl{margin-top:14px}
+.s2 .tl .ev{display:grid;grid-template-columns:104px 16px 1fr;align-items:start}
+.s2 .tl .ev .when{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--grey);text-align:right;padding-right:11px;padding-top:1px}
+.s2 .tl .ev .r{position:relative;display:flex;justify-content:center}
+.s2 .tl .ev .r::before{content:"";position:absolute;top:4px;bottom:-13px;width:2px;background:var(--line-2)}
+.s2 .tl .ev:last-child .r::before{display:none}
+.s2 .tl .ev .nd{width:9px;height:9px;border-radius:50%;background:var(--card);border:2px solid var(--line-2);z-index:1;margin-top:2px}
+.s2 .tl .ev.now .nd{border-color:var(--blue);background:var(--blue)}
+.s2 .tl .ev .tx{padding-bottom:13px;padding-left:9px}
+.s2 .tl .ev .stt{font-size:12.5px;font-weight:600}.s2 .tl .ev.now .stt{color:var(--blue)}
+.s2 .tl .ev .loc{font-size:11px;color:var(--grey)}
+</style>`;
+function ship2StatusPill(s){
+  if(shipDelivered(s))return `<span class="pill in"><span class="d" style="background:var(--green)"></span>Doručené</span>`;
+  if(shipProblem(s))return `<span class="pill warn"><span class="d" style="background:var(--warn)"></span>${esc(s.status||"Problém")}</span>`;
+  if(shipStageRank(s)>=1)return `<span class="pill info"><span class="d" style="background:#3a6ea5"></span>${esc(s.status||"Na ceste")}</span>`;
+  return `<span class="pill mut"><span class="d" style="background:var(--grey)"></span>${esc(s.status||"Zadané")}</span>`;
+}
+function ship2Eta(s){
+  if(shipDelivered(s))return `<span class="eta">Doručené <b>${esc(s.delivered_on?String(s.delivered_on).slice(0,10):(s.expected_date?String(s.expected_date).slice(0,10):"—"))}</b></span>`;
+  if(s.expected_date)return `<span class="eta">ETA <b>${esc(String(s.expected_date).slice(0,10))}</b></span>`;
+  return `<span class="eta muted">ETA neznáme</span>`;
+}
+function ship2Stepper(s){const cur=ship2Cur(s);const closed=shipStageRank(s)===3;
+  const steps=SHIP2_STEPS.map((l,i)=>{const cls=i<cur?"done":(i===cur?"now":"");return `<div class="s ${cls}"><div class="dot"></div>${esc(l)}</div>`;}).join("");
+  return `<div class="step">${steps}</div>${closed?`<div class="muted" style="font-size:11px;text-align:right">↩ ${esc(s.status||"uzavreté / vrátené")}</div>`:""}`;
+}
+async function renderShip2(){
+  $("#view").innerHTML=SHIP2_CSS+`<div class="card muted">Načítavam…</div>`;
+  const {data,error}=await sb.from("shipments").select("id,tracking_number,carrier,direction,status,sender,from_address,to_address,our_order,expected_date,delivered_on,created_at,label_date,ship_cost,ship_cost_cur,customs,jds_number").order("id",{ascending:false}).limit(500);
+  if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
+  let list=data||[];
+  if(ship2Dir)list=list.filter(s=>s.direction===ship2Dir);
+  if(ship2Q){const q=ship2Q.toLowerCase();list=list.filter(s=>((s.tracking_number||"")+" "+(s.carrier||"")+" "+(s.from_address||"")+" "+(s.to_address||"")+" "+(s.sender||"")).toLowerCase().includes(q));}
+  const dopt=(v,l)=>`<option value="${v}" ${ship2Dir===v?"selected":""}>${l}</option>`;
+  const cards=list.map(s=>{const cn=detectCarrierName(s.carrier,s.tracking_number);const cs=ship2CarrierStyle(cn);
+    const fromP=simplifyPlace(s.from_address||s.sender)||"—",toP=simplifyPlace(s.to_address)||"—";
+    return `<div class="ccard" onclick="ship2Detail(${s.id})">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
+        <span class="clogo" style="background:${cs[0]};color:${cs[1]}">${esc(cs[2])}</span>
+        <div style="min-width:0"><div class="tnl">${esc(s.carrier||cn||"?")} · ${dirBadge(s.direction)}</div><div class="tn">${esc(s.tracking_number||"—")}</div></div>
+        <div style="margin-left:auto;text-align:right">${ship2StatusPill(s)}<div style="margin-top:3px">${ship2Eta(s)}</div></div>
+      </div>
+      ${ship2Stepper(s)}
+      <div class="route"><span class="p">${esc(fromP)}</span><span class="ar"></span><span class="p">${esc(toP)}</span></div>
+    </div>`;}).join("")||`<div class="muted">Žiadne zásielky pre daný filter.</div>`;
+  $("#view").innerHTML=SHIP2_CSS+`<div class="s2">
+    <div class="card"><div class="msg" style="background:var(--acc-soft);color:#8a4e14">🛰️ <b>Skúšobný vzhľad</b> podľa trackovacích agregátorov (17TRACK/4Trackit). Reálne dáta ako v „Zásielky". Porovnaj a povedz, čo si necháme.</div>
+      <div class="toolbar" style="margin-top:8px"><input placeholder="Hľadať tracking / prepravcu / miesto…" value="${esc(ship2Q)}" oninput="ship2Q=this.value;renderShip2()">
+        <select onchange="ship2Dir=this.value;renderShip2()">${dopt("","Všetky smery")}${dopt("inbound","Prichádzajúce")}${dopt("outbound","Odchádzajúce")}${dopt("dropship","Dropship")}</select></div>
+      <div class="muted">${list.length} zásielok</div></div>
+    <div class="grid">${cards}</div></div>`;
+}
+async function ship2Detail(id){navHash("ship2/"+id);
+  $("#view").innerHTML=SHIP2_CSS+`<div class="card muted">Načítavam…</div>`;
+  const {data:s,error}=await sb.from("shipments").select("*").eq("id",id).single();
+  if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
+  const {data:its}=await sb.from("shipment_items").select("id,quantity,product_id,products(name)").eq("shipment_id",id);
+  const {data:lots}=await sb.from("stock_lots").select("id,status").eq("shipment_id",id);
+  const cn=detectCarrierName(s.carrier,s.tracking_number);const cs=ship2CarrierStyle(cn);
+  const fromP=simplifyPlace(s.from_address||s.sender)||"—",toP=simplifyPlace(s.to_address)||"—";
+  const acts=(s.tracking_json&&Array.isArray(s.tracking_json.activity))?s.tracking_json.activity:[];
+  const tl=acts.length?acts.slice(0,14).map((a,i)=>`<div class="ev ${i===0?"now":""}"><div class="when">${esc(a.date||"")}</div><div class="r"><div class="nd"></div></div><div class="tx"><div class="stt">${esc(a.status||"")}</div>${a.location?`<div class="loc">${esc(a.location)}</div>`:""}</div></div>`).join(""):`<div class="muted" style="font-size:12.5px">Zatiaľ bez detailov trasy — klikni „🔄 Aktualizovať stav".</div>`;
+  const m=(k,v)=>v?`<div class="m"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div></div>`:"";
+  const meta=[
+    m("Vytvorené (dopravca)",s.label_date?String(s.label_date).slice(0,10):""),
+    m("Pridané do systému",s.created_at?String(s.created_at).slice(0,10):""),
+    m("Platba",(s.payment_method?(SHIP_PAYM[s.payment_method]||s.payment_method):"")+(s.is_paid?" · zaplatené":s.payment_method?" · nezaplatené":"")),
+    m("Objednávka",[s.our_order,s.order_source].filter(Boolean).join(" · ")),
+    s.customs?m("Colné konanie (JDS)",s.jds_number||"áno"):"",
+    m("Cena dopravy",s.ship_cost?(s.ship_cost+" "+(s.ship_cost_cur||"")):"— (z faktúry)"),
+  ].filter(Boolean).join("");
+  const itemsTxt=(its||[]).map(i=>`${fmtNum(i.quantity)}× ${esc((i.products&&i.products.name)||"?")}`).join(", ");
+  const onWay=(lots||[]).filter(l=>l.status==="na_ceste").length;
+  $("#view").innerHTML=SHIP2_CSS+`<div class="s2">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn ghost sm" onclick="renderShip2()">← Späť</button>
+        ${(canWrite()&&!shipClosed(s))?`<button class="btn sm" onclick="ship2Track(${id})">🔄 Aktualizovať stav</button>`:""}
+        <button class="btn ghost sm" onclick="shipDetail(${id})">↔ Otvoriť v starom vzhľade</button>
+        <span id="ship_upsmsg"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+        <span class="clogo" style="background:${cs[0]};color:${cs[1]};width:52px;height:38px;flex:0 0 52px;font-size:13px">${esc(cs[2])}</span>
+        <div style="flex:1;min-width:180px"><div class="tnl">${esc(s.carrier||cn||"?")} · ${dirBadge(s.direction)}</div><div class="tn" style="font-size:16px">${esc(s.tracking_number||"—")}${copyBtn(s.tracking_number)}</div></div>
+        <div style="text-align:right">${ship2StatusPill(s)}<div style="margin-top:4px">${ship2Eta(s)}</div></div>
+      </div>
+      ${ship2Stepper(s)}
+      <div class="route"><span class="p">${esc(fromP)}</span><span class="ar"></span><span class="p">${esc(toP)}</span></div>
+      <div class="mgrid">${meta}</div>
+      ${(itemsTxt||onWay)?`<div class="msg" style="background:var(--bg-2);color:var(--dark);margin-top:12px">📦 <b>Obsah:</b> ${itemsTxt||"—"}${onWay?` · <span class="tag o">v zásobách „doručuje sa" (${onWay})</span>`:""}</div>`:""}
+      <h4 style="margin:14px 0 2px">Trasa zásielky</h4>
+      <div class="tl">${tl}</div>
+      ${s.tracking_at?`<div class="muted" style="font-size:11px;margin-top:8px">Naposledy stiahnuté od prepravcu: ${esc(String(s.tracking_at).replace("T"," ").slice(0,16))}</div>`:""}
+    </div></div>`;
+}
+// obnova stavu pre Zásielky 2 (rovnaké API ako starý detail, potom prekreslí ship2Detail)
+async function ship2Track(id){
+  const {data:s}=await sb.from("shipments").select("tracking_number,carrier").eq("id",id).single();
+  if(!s||!s.tracking_number){alert("Zásielka nemá tracking číslo.");return;}
+  const cf=carrierFn(s.carrier,s.tracking_number);const msg=$("#ship_upsmsg");
+  if(msg)msg.innerHTML=`<span class="muted">🔄 Zisťujem stav u ${esc(cf.name)}…</span>`;
+  let data=null,error=null;
+  try{const r=await sb.functions.invoke(cf.fn,{body:{tracking:s.tracking_number}});data=r.data;error=r.error;}catch(e){error=e;}
+  if(error||(data&&data.error)||!data||!data.found){
+    let detail=(data&&data.error)?data.error:((error&&(error.message||error.name))||"funkcia neodpovedala");
+    if(msg)msg.innerHTML=`<span class="msg err" style="display:inline-block">${esc(cf.name)}: ${esc(String(detail))}</span>`;return;}
+  const pd=data.pod||{};
+  const upd={status:data.status||null,tracking_json:data,tracking_at:new Date().toISOString()};
+  const fromA=[pd.shipFromName,pd.shipFromAddr].filter(Boolean).join(", ")||data.from||"";
+  const toA=[pd.deliveredToName,pd.deliveredToAddr].filter(Boolean).join(", ")||data.to||"";
+  if(fromA)upd.from_address=fromA;if(toA)upd.to_address=toA;
+  if(data.delivered){upd.delivered_on=String(data.deliveredAt||data.eta||"").replace(" ","T")||null;upd.expected_date=null;}
+  else if(data.eta){upd.expected_date=String(data.eta).slice(0,10);}
+  const created=pd.labelDate||data.labelDate||data.created||"";
+  if(created)upd.label_date=String(created).replace(" ","T").slice(0,10);
+  await sb.from("shipments").update(upd).eq("id",id);
+  ship2Detail(id);
+}
 async function shipList(){
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
   const {data,error}=await sb.from("shipments").select("id,tracking_number,carrier,direction,status,sender,from_address,to_address,our_order,contents,expected_date,delivered_on,created_at,label_date,is_paid,customs,incoterm,jds_number,invoice_number,customer_payment,paid_where,pay_amount,pay_currency,ship_cost,ship_cost_cur").order("id",{ascending:false}).limit(500);
