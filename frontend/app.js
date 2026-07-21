@@ -2479,53 +2479,84 @@ function repStatusColor(s){const st=REP_STAGES.find(x=>x.k===s);return st?st.cls
 function repStageNum(s){const st=REP_STAGES.find(x=>x.k===s);return st?st.n:0;}
 function repLocked(r){return r&&r.status==="uzavrete";}
 function repNextStage(k){const i=repStageIdx(k);return REP_STATUS[Math.min(i+1,REP_STATUS.length-1)];}
-let repKind="",repStatus="",repQ="",repPhotos=[];
+let repKind="",repStatus="",repQ="",repTech="",repSort="new",repWaiting=false,repPhotos=[];
+// SLA / zvýraznenie čakajúcich (dni) — uložené lokálne
+function repSla(){try{return Object.assign({def:5,diagnostika:2,partsAfter:3},JSON.parse(localStorage.getItem("repsla_"+ME.id)||"{}"));}catch(e){return {def:5,diagnostika:2,partsAfter:3};}}
+function repDays(ts){if(!ts)return 0;return Math.floor((Date.now()-new Date(ts).getTime())/86400000);}
+function repBreach(r){if(!r||r.status==="uzavrete")return null;const s=repSla();
+  if(r.status==="cakanie_diely"&&r.parts_expected){const over=Math.floor((Date.now()-new Date(r.parts_expected).getTime())/86400000)-s.partsAfter;return over>0?{days:over,reason:"diely meškajú (nad termín + "+s.partsAfter+" dní)"}:null;}
+  const lim=r.status==="diagnostika"?s.diagnostika:s.def;const d=repDays(r.updated_at||r.created_at);
+  return d>lim?{days:d,reason:"čaká v stave nad "+lim+" dní"}:null;}
+function repStepBar(status){const cur=repStageNum(status);
+  return `<div style="display:flex;gap:2px;min-width:110px" data-tip="${esc(repStageLabel(status))}">${REP_STAGES.map(s=>{const isCur=s.n===cur;const on=s.n<cur;return `<span style="flex:1;height:6px;border-radius:3px;background:${isCur?"var(--blue)":(on?"var(--green)":"var(--line-2)")}"></span>`;}).join("")}</div>`;}
+function repSlaModal(){const s=repSla();
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Termíny / zvýraznenie</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="font-size:12.5px;margin-bottom:8px">Zvýrazniť opravu, ak čaká dlhšie ako:</div>
+    <div class="row2"><div><label>Bežne v stave (dni)</label><input id="sla_def" type="number" value="${s.def}"></div>
+      <div><label>V stave Diagnostika (dni)</label><input id="sla_diag" type="number" value="${s.diagnostika}"></div></div>
+    <label>Čakanie na diely — po predpokladanom termíne (dni)</label><input id="sla_parts" type="number" value="${s.partsAfter}">
+    <div style="text-align:right;margin-top:12px"><button class="btn" style="width:auto" onclick="repSlaDo()">Uložiť</button></div>`);}
+function repSlaDo(){const o={def:Number($("#sla_def").value)||5,diagnostika:Number($("#sla_diag").value)||2,partsAfter:Number($("#sla_parts").value)||3};localStorage.setItem("repsla_"+ME.id,JSON.stringify(o));closeModal();renderRepairs();}
 function renderRepairs(){
   if(!canWrite()){$("#view").innerHTML=`<div class="card"><div class="msg err">Táto sekcia je pre user/admin.</div></div>`;return;}
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
-  sb.from("repairs").select("*").order("id",{ascending:false}).limit(500).then(({data,error})=>{
+  sb.from("repairs").select("*").order("id",{ascending:false}).limit(1000).then(({data,error})=>{
     if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
     let list=data||[];
+    const techs=[...new Set(list.map(r=>r.technician).filter(Boolean))].sort();
     if(repKind)list=list.filter(r=>r.kind===repKind);
     if(repStatus)list=list.filter(r=>r.status===repStatus);
-    if(repQ){const q=repQ.toLowerCase();list=list.filter(r=>((r.title||"")+" "+(r.customer||"")+" "+(r.serial||"")+" "+(r.technician||"")+" "+(r.received_by||"")).toLowerCase().includes(q));}
+    if(repTech)list=list.filter(r=>(r.technician||"")===repTech);
+    if(repWaiting)list=list.filter(r=>repBreach(r));
+    if(repQ){const q=repQ.toLowerCase();list=list.filter(r=>((r.title||"")+" "+(r.repair_no||"")+" "+(r.customer||"")+" "+(r.customer_email||"")+" "+(r.customer_phone||"")+" "+(r.serial||"")+" "+(r.technician||"")+" "+(r.last_by||"")+" "+(r.received_by||"")).toLowerCase().includes(q));}
+    const SORT={new:(a,b)=>b.id-a.id,old:(a,b)=>a.id-b.id,deadline:(a,b)=>(a.deadline||"9999").localeCompare(b.deadline||"9999"),waiting:(a,b)=>repDays(b.updated_at||b.created_at)-repDays(a.updated_at||a.created_at)};
+    list=list.slice().sort(SORT[repSort]||SORT.new);
     const nm=r=>r.title||((DATA.products.find(p=>p.id===r.product_id)||{}).name)||"(bez názvu)";
     const today=new Date().toISOString().slice(0,10);
-    const rowH=r=>{const overdue=r.kind==="reklamacia"&&r.deadline&&r.deadline<today&&repStageIdx(r.status)<REP_STAGES.length-1;
-      return `<tr onclick="repairDetail(${r.id})" style="cursor:pointer;${overdue?"background:#fdeeee":""}">
-        <td><b>${esc(nm(r))}</b>${r.repair_no?`<div class="psub mono">${esc(r.repair_no)}</div>`:""}${r.serial?`<div class="psub">SN: ${esc(r.serial)}</div>`:""}<div class="psub">${r.kind==="reklamacia"?`<span class="tag r">reklamácia</span>`:`<span class="tag b">oprava</span>`}</div></td>
+    const rowH=r=>{const br=repBreach(r);const overdue=r.kind==="reklamacia"&&r.deadline&&r.deadline<today&&r.status!=="uzavrete";
+      const hl=br?(br.days>=repSla().def*2?"background:#fdeeee":"background:#fff6e9"):"";
+      return `<tr onclick="repairDetail(${r.id})" style="cursor:pointer;${hl}">
+        <td style="max-width:190px"><b>${esc(nm(r))}</b>${r.repair_no?`<div class="psub mono">${esc(r.repair_no)}</div>`:""}${r.serial?`<div class="psub">SN: ${esc(r.serial)}</div>`:""}${r.kind==="reklamacia"?`<span class="tag r" style="font-size:10px">reklamácia</span>`:""}</td>
         <td>${esc(r.customer||"—")}${r.customer_contact?`<div class="psub">${esc(r.customer_contact)}</div>`:""}</td>
-        <td><span class="tag ${repStatusColor(r.status)}">${esc(repStageLabel(r.status))}</span></td>
-        <td>${esc(r.deadline?String(r.deadline).slice(0,10):"—")}${overdue?` <span class="tag r">po termíne</span>`:""}</td>
-        <td>${esc(r.received_by||"—")}${r.technician?`<div class="psub">tech: ${esc(r.technician)}</div>`:""}</td>
+        <td>${repStepBar(r.status)}<div class="psub"><span class="tag ${repStatusColor(r.status)}" style="font-size:10px">${repStageNum(r.status)} · ${esc(repStageLabel(r.status).replace(/^\d+ · /,""))}</span></div></td>
+        <td>${br?`<span class="tag o" data-tip="${esc(br.reason)}">⏱ ${br.days} dní</span>`:`<span class="muted">${repDays(r.updated_at||r.created_at)} dní</span>`}${overdue?`<div class="psub"><span class="tag r">po termíne ${esc(String(r.deadline).slice(0,10))}</span></div>`:(r.deadline?`<div class="psub">termín ${esc(String(r.deadline).slice(0,10))}</div>`:"")}</td>
+        <td><b>${esc(r.technician||"—")}</b>${r.last_by?`<div class="psub">zmenil: ${esc(r.last_by)}</div>`:""}${r.received_by?`<div class="psub">prijal: ${esc(r.received_by)}</div>`:""}</td>
         <td>${esc(String(r.created_at||"").slice(0,10))}</td></tr>`;};
-    // zoskupenie do sekcií podľa stavu (prijaté → … → uzavreté)
+    const thead=`<thead><tr><th>Tovar</th><th>Zákazník</th><th>Stav</th><th>Čaká / termín</th><th>Technik / zmenil</th><th>Vytvorené</th></tr></thead>`;
     let sections="";
-    if(!list.length){sections=`<div class="card"><div class="muted">Žiadne záznamy.</div></div>`;}
+    if(!list.length){sections=`<div class="card"><div class="muted">Žiadne záznamy pre daný filter.</div></div>`;}
     else{
-      REP_STAGES.forEach(st=>{
-        const grp=list.filter(r=>r.status===st.k);if(!grp.length)return;
-        sections+=`<div class="card"><h3 style="margin:0 0 8px"><span class="tag ${repStatusColor(st.k)}">${esc(st.label)}</span> <span class="muted" style="font-weight:400">${grp.length}</span></h3>
-          <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Tovar</th><th>Zákazník</th><th>Stav</th><th>Termín</th><th>Prijal / technik</th><th>Vytvorené</th></tr></thead><tbody>${grp.map(rowH).join("")}</tbody></table></div></div>`;
-      });
-      // stavy mimo definície (poistka)
+      REP_STAGES.forEach(st=>{const grp=list.filter(r=>r.status===st.k);if(!grp.length)return;
+        const brc=grp.filter(r=>repBreach(r)).length;
+        sections+=`<div class="card"><h3 style="margin:0 0 8px"><span class="tag ${repStatusColor(st.k)}">${esc(st.label)}</span> <span class="muted" style="font-weight:400">${grp.length}</span>${brc?` <span class="tag o">⏱ ${brc} čaká</span>`:""}</h3>
+          <div class="ptbl-wrap"><table class="ptbl">${thead}<tbody>${grp.map(rowH).join("")}</tbody></table></div></div>`;});
       const other=list.filter(r=>!REP_STATUS.includes(r.status));
-      if(other.length)sections+=`<div class="card"><h3 style="margin:0 0 8px">Iné (${other.length})</h3><div class="ptbl-wrap"><table class="ptbl"><tbody>${other.map(rowH).join("")}</tbody></table></div></div>`;
+      if(other.length)sections+=`<div class="card"><h3 style="margin:0 0 8px">Iné (${other.length})</h3><div class="ptbl-wrap"><table class="ptbl">${thead}<tbody>${other.map(rowH).join("")}</tbody></table></div></div>`;
     }
     const kbtn=(v,l)=>`<option value="${v}" ${repKind===v?"selected":""}>${l}</option>`;
     const stOpts=`<option value="">Všetky stavy</option>`+REP_STAGES.map(s=>`<option value="${s.k}" ${repStatus===s.k?"selected":""}>${esc(s.label)}</option>`).join("");
+    const so=(v,l)=>`<option value="${v}" ${repSort===v?"selected":""}>${l}</option>`;
     $("#view").innerHTML=`
-    <div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
-      <button class="btn green sm" onclick="repairForm(0,'oprava')">+ Nová oprava</button>
-      <button class="btn sm" style="background:var(--red);width:auto" onclick="repairForm(0,'reklamacia')">+ Nová reklamácia</button></div></div>
     <div class="card">
-      <div class="toolbar"><input placeholder="Hľadať (názov / zákazník / SN / technik)…" value="${esc(repQ)}" oninput="repQ=this.value;renderRepairs()">
+      <div class="inline" style="gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div><b style="font-size:15px">Opravy a reklamácie</b> <span class="muted" style="font-size:12px">${list.length} záznamov</span></div>
+        <div class="inline" style="gap:6px;flex-wrap:wrap">
+          <button class="btn green sm" onclick="repairForm(0,'oprava')">+ Oprava</button>
+          <button class="btn red sm" onclick="repairForm(0,'reklamacia')">+ Reklamácia</button>
+          <button class="btn ghost sm" onclick="repSlaModal()">⏱ Termíny / zvýraznenie</button></div>
+      </div>
+      <div style="border-top:1px solid var(--line-2);margin-bottom:8px"></div>
+      <div class="toolbar"><input id="repQ" placeholder="🔎 Hľadať — číslo opravy (OPR…), zákazník, SN, tel./e-mail, technik…" value="${esc(repQ)}" oninput="repQ=this.value;searchInput('repQ',renderRepairs)" style="flex:2 1 240px">
+        <select onchange="repSort=this.value;renderRepairs()">${so("new","Najnovšie")}${so("old","Najstaršie")}${so("deadline","Podľa termínu")}${so("waiting","Najdlhšie čaká")}</select></div>
+      <div class="toolbar">
         <select onchange="repKind=this.value;renderRepairs()">${kbtn("","Opravy + reklamácie")}${kbtn("oprava","Len opravy")}${kbtn("reklamacia","Len reklamácie")}</select>
-        <select onchange="repStatus=this.value;renderRepairs()">${stOpts}</select></div>
-      <div class="muted">${list.length} záznamov · zoradené po sekciách podľa stavu</div></div>
+        <select onchange="repStatus=this.value;renderRepairs()">${stOpts}</select>
+        <select onchange="repTech=this.value;renderRepairs()"><option value="">Technik (všetci)</option>${techs.map(t=>`<option value="${esc(t)}" ${repTech===t?"selected":""}>${esc(t)}</option>`).join("")}</select>
+        <label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${repWaiting?"checked":""} onchange="repWaiting=this.checked;renderRepairs()"> ⏱ Len čakajúce</label></div>
+    </div>
     <div id="repReqs"></div>
     ${sections}`;
-    loadRepairRequests();
+    restoreSearchFocus();loadRepairRequests();
   });
 }
 // nové verejné požiadavky od zákazníkov (self-service stránka oprava.html)
@@ -2658,7 +2689,7 @@ async function repairDetail(id){navHash("repairs/"+id);
       <div class="fgrid">
         ${f("Zákazník",esc(r.customer||""))}${f("E-mail",esc(r.customer_email||""))}${f("Telefón",esc(r.customer_phone||""))}${f("Adresa",esc(r.customer_address||""),"w2")}
         ${f("Sériové č.",esc(r.serial||""))}${f("QR",esc(r.qr_code||""))}${f("Termín",r.deadline?esc(String(r.deadline).slice(0,10)):"")}
-        ${f("Prijal",esc(r.received_by||""))}${f("Technik",esc(r.technician||""))}
+        ${f("Technik (rieši)",esc(r.technician||""))}${f("Naposledy zmenil",esc(r.last_by||""))}${f("Prijal",esc(r.received_by||""))}
         ${f("Odhad ceny",r.price_estimate!=null?esc(r.price_estimate+" "+(r.price_currency||"")):"")}
         ${f("Finálna cena",r.price_final!=null?esc(r.price_final+" "+(r.price_currency||"")):"")}
         ${f("Vytvorené",esc(String(r.created_at||"").slice(0,10)))}
@@ -2706,9 +2737,10 @@ async function repairAddEvent(id){
   const {error}=await sb.from("repair_events").insert({repair_id:id,stage:repEventStage,note:note||null,data,created_by_name:author});
   if(error){if(msg)msg.innerHTML=`<div class="msg err">${esc(error.message)}</div>`;return;}
   // aktualizuj hlavný záznam (stav + užitočné sumárne polia)
-  const upd={status:repEventStage,updated_at:new Date().toISOString()};
+  const upd={status:repEventStage,updated_at:new Date().toISOString(),last_by:author};
   if(data.technician)upd.technician=data.technician;
   if(data.received_by)upd.received_by=data.received_by;
+  if(data.expected)upd.parts_expected=data.expected;
   if(data.price!=null&&data.price!=="")upd.price_estimate=Number(data.price);
   if(data.price_final!=null&&data.price_final!=="")upd.price_final=Number(data.price_final);
   if(data.currency)upd.price_currency=data.currency;
