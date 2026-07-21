@@ -1015,7 +1015,7 @@ function prodDetail(id){const p=DATA.products.find(x=>x.id===id);if(!p)return;na
   const tags=productTagNames(id).map(t=>`<span class="tag" style="background:#f3eefb;color:#5e37a6">#${esc(t)}</span>`).join(" ");
   const img=p.image_url?`<img src="${esc(p.image_url)}" style="max-width:220px;border-radius:10px;border:1px solid var(--line)">`:`<div class="muted">bez fotky</div>`;
   const row=(l,v)=>`<div class="lot"><div class="m">${esc(l)}</div><b>${v}</b></div>`;
-  const priceVal=p.price!=null&&p.price!==""?esc(p.price)+" "+esc(p.currency||"")+` <span title="${esc(priceInfo(p))}" style="cursor:help;color:#7a8aa5">&#9432;</span>`:"—";
+  const priceVal=p.price!=null&&p.price!==""?esc(p.price)+" "+esc(p.currency||"")+` <span class="tip" data-tip="${esc(priceInfo(p))}" style="cursor:help;color:var(--grey);font-size:12px">&#9432;</span>`:"—";
   const lots=stockLots.filter(l=>l.product_id===id);
   const lotsHtml=lots.length?lots.map(l=>`<div class="lot"><div>${whChip(l)} · ${esc((l.warehouse_locations&&l.warehouse_locations.code)||"—")} · <b>${fmtNum(l.quantity)} ks</b> · ${STATE_LBL[l.state]||esc(l.state||"")}</div><div class="m">${l.serial?"SN: "+esc(l.serial)+" · ":""}${l.qr_code?esc(l.qr_code)+" · ":""}${l.buy_price!=null?"nákup "+fmtNum(l.buy_price)+" "+(l.buy_currency||""):""}${l.buy_date?" · "+String(l.buy_date).slice(0,10):""}</div></div>`).join(""):`<div class="muted">Žiadne šarže na sklade.</div>`;
   const params=productAttrList(id);
@@ -1027,14 +1027,14 @@ function prodDetail(id){const p=DATA.products.find(x=>x.id===id);if(!p)return;na
       <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:5px">
         <div style="font-size:14px"><b>${esc(brandName(p))||"—"}</b> <span class="muted">· ${esc(catPathText(p.category_id))||"bez kategórie"}</span></div>
         <div class="muted" style="font-size:12.5px">${p.model?esc(p.model):""}${p.sku?(p.model?" · ":"")+"EAN "+esc(p.sku)+copyBtn(p.sku):""}${p.weight_g?" · "+esc(p.weight_g)+" g":""}</div>
-        <div style="font-size:13px">Orientačná cena: <b>${priceVal}</b></div>
+        <div style="font-size:15px"><b>${priceVal}</b></div>
         ${tags?`<div>${tags}</div>`:""}
-        ${params.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">${params.map(a=>`<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:4px 8px;font-size:12px"><span class="muted">${esc(a.label)}${a.unit?" ("+esc(a.unit)+")":""}:</span> <b>${esc(a.value)}</b></div>`).join("")}</div>`:""}
-        ${p.description?`<div class="muted" style="font-size:12.5px">${esc(p.description)}</div>`:""}
       </div>
     </div>
-    ${p.long_description?`<div class="lot" style="margin-top:8px"><div class="m">Podrobný popis / parametre</div><div>${esc(p.long_description).replace(/\n/g,"<br>")}</div></div>`:""}
-    <h4 style="margin-top:12px">Na sklade (tovar)</h4>${lotsHtml}</div>`;
+    ${params.length?`<h4 style="margin:14px 0 6px">Parametre</h4><div style="display:flex;flex-wrap:wrap;gap:6px">${params.map(a=>`<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12.5px"><span class="muted">${esc(a.label)}${a.unit?" ("+esc(a.unit)+")":""}:</span> <b>${esc(a.value)}</b></div>`).join("")}</div>`:""}
+    ${p.description?`<div class="muted" style="font-size:12.5px;margin-top:8px">${esc(p.description)}</div>`:""}
+    ${p.long_description?`<div class="lot" style="margin-top:8px"><div class="m">Podrobný popis</div><div>${esc(p.long_description).replace(/\n/g,"<br>")}</div></div>`:""}
+    <h4 style="margin:14px 0 6px">Na sklade (tovar)</h4>${lotsHtml}</div>`;
 }
 // ===== DUPLICITY =====
 let DUP_MINMATCH=4;               // min. počet zhodných parametrov pre param-duplicitu
