@@ -90,7 +90,7 @@ async function loadData(){
 function catAncestors(catId){const ids=[];let id=catId,g=0;while(id!=null&&g++<10){ids.push(Number(id));const c=DATA.categories.find(x=>x.id===id);id=c?c.parent_id:null;}return ids;}
 function attrDefsForCat(catId){if(!catId)return [];const anc=new Set(catAncestors(Number(catId)));return DATA.attrDefs.filter(d=>anc.has(Number(d.category_id))).sort((a,b)=>((a.sort_order||0)-(b.sort_order||0))||(a.label||"").localeCompare(b.label||""));}
 function productAttrList(pid){const vals=DATA.pattrs.filter(x=>x.product_id===pid);return vals.map(v=>{const d=DATA.attrDefs.find(x=>x.id===v.attr_def_id);return d?{label:d.label,unit:d.unit,value:v.value}:null;}).filter(Boolean);}
-const TAG_PALETTE=[["#e6eefb","#2a4fa0"],["#e4f6ea","#1d7d43"],["#fdf0df","#a8630c"],["#f3eefb","#5e37a6"],["#fde8e7","#b02a26"],["#e0f7f5","#0d7a70"],["#eef1f6","#41506a"]];
+const TAG_PALETTE=[["#f6e7d3","#8a4e14"],["#e4f6ea","#1d7d43"],["#fdf0df","#a8630c"],["#f3eefb","#5e37a6"],["#fde8e7","#b02a26"],["#e0f7f5","#0d7a70"],["#efe9dd","#6f665a"]];
 function tagColor(name){let h=0;const s=String(name||"");for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return TAG_PALETTE[h%TAG_PALETTE.length];}
 function tagChip(t,active,onclick){const c=tagColor(t.name);return `<span class="tagchip ${active?"on":""}" style="background:${c[0]};color:${c[1]}" onclick="${onclick}">#${esc(t.name)}</span>`;}
 function tagName(id){const t=DATA.tags.find(x=>x.id===id);return t?t.name:"";}
@@ -611,7 +611,7 @@ function renderStock(){
     if(exp){ls.forEach(l=>{const loc=(l.warehouse_locations&&l.warehouse_locations.code)||"—";
       const buy=(l.buy_price!=null?fmtNum(l.buy_price)+" "+(l.buy_currency||""):"—")+(l.buy_date?" · "+String(l.buy_date).slice(0,10):"")+(l.invoice_number?" · "+esc(l.invoice_number):"");
       const posCell=l.status==="na_ceste"?`<span class="tag o">doručuje sa</span>${l.expected_date?`<div class="psub">predp. doručenie: ${esc(String(l.expected_date).slice(0,10))}</div>`:""}`:esc(loc);
-      const rowbg=l.status==="na_ceste"?"background:#fff6e9":"background:#f8fafe";
+      const rowbg=l.status==="na_ceste"?"background:#fff6e9":"background:#faf7f0";
       body+=`<tr style="${rowbg}">
         <td style="padding-left:3mm"><input type="checkbox" ${stockSel[l.id]?"checked":""} onclick="selLot(${l.id},this.checked)"></td>
         <td class="psub" style="padding-left:26px">↳ <span style="cursor:pointer" onclick="lotEdit(${l.id})">${l.track==="unit"?"kus":"množstvo"}</span>${l.serial?" · SN: "+esc(l.serial)+copyBtn(l.serial):""}${l.qr_code?" · "+esc(l.qr_code)+copyBtn(l.qr_code):""}${l.state_note?" · "+esc(l.state_note):""}</td>
@@ -620,7 +620,7 @@ function renderStock(){
   });
   const table=keys.length?`<div class="ptbl-wrap"><table class="ptbl"><thead><tr><th></th><th>Produkt</th><th>Sklad</th><th>Pozícia</th><th class="r">Množstvo (+na ceste/−rez.)</th><th>Stav</th><th>Nákup (cena / dátum / faktúra)</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`:`<div class="muted">Žiadne zásoby pre daný filter.</div>`;
   const totKs=lots.reduce((s,l)=>s+(+l.quantity||0),0);const selCount=allLotIds.filter(id=>stockSel[id]).length;
-  const bulkBar=selCount?`<div style="background:#eaf1ff;border:1px solid #cfe0ff;border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  const bulkBar=selCount?`<div style="background:#f6e7d3;border:1px solid #e3c398;border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <b style="color:var(--blue)">${selCount} vybraných</b>
     ${canWrite()?`<button class="btn red sm" onclick="bulkIssue()">− Vydať vybrané</button>`:""}
     <button class="btn sm" style="width:auto" onclick="bulkMove()">Presunúť vybrané</button>
@@ -792,7 +792,7 @@ function renderPlacement(){
     <div class="inline" style="gap:6px;margin-top:8px"><input id="pl_newwh" placeholder="Nový sklad (krátky názov)…"><button class="btn green sm" onclick="plAddWh()">+ Sklad</button>${w?`<button class="btn red sm" onclick="plDelWh()">Zmazať sklad</button>`:""}</div>
     ${w?`<div class="row2" style="margin-top:10px"><div><label>Názov (krátky)</label><input value="${esc(w.name)}" onchange="plRenameWh(this.value)" placeholder="napr. Rostovská"></div>
       <div><label>Adresa / popis (nepovinné)</label><input value="${esc(w.address||'')}" onchange="plSetAddr(this.value)" placeholder="napr. Rostovská 260/2b, Praha"></div></div>
-    <label style="margin-top:10px">Farba skladu (podfarbenie)</label><input type="color" value="${esc(w.color||'#3b6fd4')}" onchange="plColor(this.value)" style="width:70px;height:38px;padding:2px">`:""}
+    <label style="margin-top:10px">Farba skladu (podfarbenie)</label><input type="color" value="${esc(w.color||'#b9641b')}" onchange="plColor(this.value)" style="width:70px;height:38px;padding:2px">`:""}
     <div style="display:flex;gap:6px;margin-top:14px"><div style="flex:0 0 130px" class="muted" style="font-size:12px">OZNAČENIE (KRÁTKE)</div><div class="muted" style="font-size:12px">POPIS POZÍCIE</div></div>
     <div id="pl_locs">${locRows}</div>
     <div class="inline" style="gap:6px;margin-top:6px"><input id="pl_code" placeholder="napr. R1-P3" style="max-width:130px"><input id="pl_desc" placeholder="Popis pozície"><button class="btn green sm" onclick="plAddLoc()">+ pozícia</button></div>
@@ -1067,7 +1067,7 @@ function prodForm(id,prefill){
   const catOpts=catOptionsHtml(p.category_id);
   const brOpts=`<option value="">— značka —</option>`+DATA.brands.map(b=>`<option value="${b.id}" ${p.brand_id===b.id?"selected":""}>${esc(b.name)}</option>`).join("")+`<option value="__new">➕ nová značka…</option>`;
   $("#view").innerHTML=`<div class="card"><h2>${id?"Upraviť produkt":"Nový produkt"}</h2>
-    <div style="background:#eef4ff;border:1px solid #cfe0ff;border-radius:10px;padding:12px">
+    <div style="background:#f7efe2;border:1px solid #e3c398;border-radius:10px;padding:12px">
       <label style="margin-top:0">EAN / čiarový kód — naskenuj alebo odfoť, údaje sa doplnia samé</label>
       <div class="inline"><input id="p_sku" value="${esc(p.sku||"")}" placeholder="EAN / kód">
         <button class="btn ghost sm" type="button" onclick="pScanBarcode()">📷 Skenovať</button>
@@ -1123,7 +1123,7 @@ function renderProdAttrs(){const box=$("#p_attrs");if(!box)return;const cid=$("#
 }
 function renderPTags(){const box=$("#p_tags");if(!box)return;const q=(($("#p_tagq")&&$("#p_tagq").value)||"").toLowerCase();
   const list=DATA.tags.filter(t=>formTags.includes(t.id)||!q||t.name.toLowerCase().includes(q));
-  box.innerHTML=list.map(t=>`<span class="chip ${formTags.includes(t.id)?"on":""}" style="cursor:pointer;padding:4px 10px;border-radius:16px;border:1px solid #cfe0ff;display:inline-block;margin:2px;${formTags.includes(t.id)?"background:var(--blue);color:#fff":"background:#eef4ff;color:var(--blue)"}" onclick="pToggleTag(${t.id})">#${esc(t.name)}</span>`).join("")||`<span class="muted">Nič nenájdené.</span>`;}
+  box.innerHTML=list.map(t=>`<span class="chip ${formTags.includes(t.id)?"on":""}" style="cursor:pointer;padding:4px 10px;border-radius:16px;border:1px solid #e3c398;display:inline-block;margin:2px;${formTags.includes(t.id)?"background:var(--blue);color:#fff":"background:#f6e7d3;color:var(--blue)"}" onclick="pToggleTag(${t.id})">#${esc(t.name)}</span>`).join("")||`<span class="muted">Nič nenájdené.</span>`;}
 function pToggleTag(id){const i=formTags.indexOf(id);if(i>=0)formTags.splice(i,1);else formTags.push(id);renderPTags();}
 async function pAddTag(){const n=prompt("Nový tag:");if(!n||!n.trim())return;const v=n.trim();
   let t=DATA.tags.find(x=>x.name.toLowerCase()===v.toLowerCase());
@@ -1399,8 +1399,8 @@ function shipfLoad(name){if(!name)return;const x=savedShipFilters().find(z=>z.na
 function shipfReset(){shipFilterDir="";shipQ="";shipPay="";shipTrackOnly=false;shipUnrecv=false;shipList();}
 function shipfManage(){const a=savedShipFilters();if(!a.length){alert("Žiadne uložené filtre.");return;}const n=prompt("Napíš názov filtra na zmazanie:\n\n"+a.map(x=>"• "+x.name).join("\n"));if(!n)return;localStorage.setItem("shsaved_"+ME.id,JSON.stringify(a.filter(x=>x.name!==n.trim())));shipList();}
 const DIRS={inbound:["Prichádzajúca","g"],outbound:["Odchádzajúca","b"],dropship:["Dropship","o"]};
-const DIRBAR={inbound:"#3b6fd4",outbound:"#e08a1e",dropship:"#7a4fc0"};
-function dirBadge(dir){const m={inbound:["↙ k nám","#e6eefb","#2a4fa0"],outbound:["↗ od nás","#fdf0df","#a8630c"],dropship:["→ dropship","#f3eefb","#5e37a6"]}[dir]||["?","#eef1f6","#5b6472"];return `<span class="tag" style="background:${m[1]};color:${m[2]}">${m[0]}</span>`;}
+const DIRBAR={inbound:"#b9641b",outbound:"#c68a12",dropship:"#7a4fc0"};
+function dirBadge(dir){const m={inbound:["↙ k nám","#f6e7d3","#8a4e14"],outbound:["↗ od nás","#fdf0df","#a8630c"],dropship:["→ dropship","#f3eefb","#5e37a6"]}[dir]||["?","#efe9dd","#6f665a"];return `<span class="tag" style="background:${m[1]};color:${m[2]}">${m[0]}</span>`;}
 function shipClosed(s){return /doru[čc]|deliver|vr[áa]t|return|uzav/i.test(s.status||"")||!!s.delivered_on;}
 function shipDelivered(s){return /doru[čc]|deliver/i.test(s.status||"")||!!s.delivered_on;}
 // zaradenie zásielky do sekcie podľa stavu (0 zadané → 3 uzavreté)
@@ -1437,7 +1437,7 @@ function flagFor(s){const x=(s||"").toLowerCase();
   if(/rak[úu]s|austria|\bat\b|wien|viede[ňn]/.test(x))return "🇦🇹";
   return "🏳️";}
 function shipProblem(s){return /[čc]ak[áa]|reklam|n[áa]hr|probl[ée]m|zdr[žz]|colné konanie|colne konanie|vr[áa]t|return|strat|lost|delay|omešk|mešk/i.test(s.status||"");}
-function shipRowBg(s){if(shipProblem(s))return "#fdeeee";return {inbound:"#eef4ff",outbound:"#fff6ec",dropship:"#f6f0fb"}[s.direction]||"#fff";}
+function shipRowBg(s){if(shipProblem(s))return "#fdeeee";return {inbound:"#f7efe2",outbound:"#fff6ec",dropship:"#f6f0fb"}[s.direction]||"#fff";}
 function shipContents(s,items){
   if(s.contents)return esc(s.contents);
   if(!items||!items.length)return "";
@@ -2168,7 +2168,7 @@ async function repairReceipt(id){
   const evRows=(evs||[]).map(ev=>{const d=ev.data||{};const flds=Object.keys(d).filter(k=>d[k]!=null&&d[k]!=="").map(k=>`${fLabel(ev.stage,k)}: ${d[k]}`).join("; ");
     return `<tr><td style="padding:4px 10px 4px 0;color:#555;white-space:nowrap;vertical-align:top">${esc(String(ev.created_at||"").replace("T"," ").slice(0,16))}</td><td style="padding:4px 0"><b>${esc(repStageLabel(ev.stage))}</b>${flds?`<br>${esc(flds)}`:""}${ev.note?`<br>📝 ${esc(ev.note)}`:""}${ev.created_by_name?`<br><span style="color:#888">${esc(ev.created_by_name)}</span>`:""}</td></tr>`;}).join("");
   const html=`<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Opravná príjemka #${id}</title>
-    <style>body{font-family:Arial,Helvetica,sans-serif;color:#222;max-width:820px;margin:24px auto;padding:0 16px}h1{border-bottom:3px solid #3b6fd4;padding-bottom:6px}table{border-collapse:collapse}.muted{color:#777}</style></head><body>
+    <style>body{font-family:Arial,Helvetica,sans-serif;color:#222;max-width:820px;margin:24px auto;padding:0 16px}h1{border-bottom:3px solid #b9641b;padding-bottom:6px}table{border-collapse:collapse}.muted{color:#777}</style></head><body>
     <h1>${r.kind==="reklamacia"?"Reklamačný":"Opravný"} protokol #${id}</h1>
     <table>${rowH("Tovar",nm)}${rowH("Sériové číslo",r.serial)}${rowH("Typ",r.kind)}${rowH("Stav",repStageLabel(r.status))}${rowH("Termín",r.deadline?String(r.deadline).slice(0,10):"")}
     ${rowH("Zákazník",r.customer)}${rowH("Kontakt",r.customer_contact)}${rowH("Prijal",r.received_by)}${rowH("Opravuje",r.technician)}
@@ -2420,7 +2420,7 @@ async function renderUserAdmin(){
   const fmtDT=s=>s?String(s).replace("T"," ").slice(0,16):"—";
   const rows=users.map(u=>{const p=u.profile||{};const banned=!!u.banned_until&&u.banned_until!=="none";
     if(userEditId===u.id){
-      return `<div class="lot" style="background:#eef4ff">
+      return `<div class="lot" style="background:#f7efe2">
         <b>${esc(u.email)}</b>
         <div class="row2" style="margin-top:6px"><div><label>Meno</label><input id="ue_name" value="${esc(p.full_name||"")}"></div>
         <div><label>Pozícia</label><input id="ue_pos" value="${esc(p.position||"")}"></div></div>
