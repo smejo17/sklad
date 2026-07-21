@@ -8,7 +8,7 @@ const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;
 let ME={email:"",role:"",id:"",perms:[]};
 // kopírovanie do schránky + malá ikonka
 function copyText(t){const s=String(t==null?"":t);if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(s).catch(()=>{});}else{const ta=document.createElement("textarea");ta.value=s;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}ta.remove();}}
-function copyBtn(t){const s=String(t==null?"":t).replace(/'/g,"\\'").replace(/"/g,"&quot;");return `<span onclick="event.stopPropagation();copyText('${s}');this.textContent='✓';setTimeout(()=>this.textContent='📋',900)" title="Kopírovať" style="cursor:pointer;color:#7a8aa5;margin-left:4px;font-size:12px">📋</span>`;}
+function copyBtn(t){const s=String(t==null?"":t).replace(/'/g,"\\'").replace(/"/g,"&quot;");return `<span onclick="event.stopPropagation();copyText('${s}');this.textContent='✓';setTimeout(()=>this.textContent='📋',900)" title="Kopírovať" style="cursor:pointer;color:#9a9086;margin-left:3px;font-size:9.5px;opacity:.7">📋</span>`;}
 let DATA={products:[],warehouses:[],locations:[],categories:[],brands:[]};
 let recvSel=null, issueLots=[], issueSel=null, prodEdit=undefined, tab="recv";
 const REASONS=["predaj","presun medzi skladmi","likvidácia","reklamácia","oprava","vzorka / test","strata","iné"];
@@ -1401,6 +1401,36 @@ function docsExport(){
 
 // ===== ZÁSIELKY =====
 let shipMode="list", shipFilterDir="", shipQ="", shipItems=[], shipPay="", shipTrackOnly=false, shipUnrecv=false;
+// rozšírené filtre + zoradenie
+let shipCarrierF="", shipStatusF="", shipCountryF="", shipCostMin="", shipCostMax="", shipCreatedFrom="", shipCreatedTo="", shipDelivFrom="", shipDelivTo="", shipSort="new";
+let shipExpandId=null; // ktorá zásielka je rozbalená priamo v zozname
+// prepínanie zobrazenia stĺpcov (uložené lokálne)
+const SHIP_COL_DEFS=[{k:"pay",l:"Objednávka / platba"},{k:"cost",l:"Doprava (cena)"},{k:"customs",l:"Colné (AWB/JDS)"}];
+function shipCols(){try{return Object.assign({pay:true,cost:true,customs:true},JSON.parse(localStorage.getItem("shipcols_"+ME.id)||"{}"));}catch(e){return {pay:true,cost:true,customs:true};}}
+function shipColToggle(k){const c=shipCols();c[k]=!c[k];localStorage.setItem("shipcols_"+ME.id,JSON.stringify(c));shipList();}
+// nápoveda pri skratkách: podčiarknuté bodkovane, tooltip s plným názvom
+function abbr(short,full){return `<span title="${esc(full)}" style="text-decoration:underline dotted;text-underline-offset:2px;cursor:help">${esc(short)}</span>`;}
+// ZJEDNOTENÝ stav (raw stav dopravcu ostáva v tooltipe)
+function shipUni(s){
+  if(shipDelivered(s))return {l:"Doručené",c:"g"};
+  if(shipProblem(s))return {l:"Rieši sa",c:"r"};
+  if(shipStageRank(s)>=1)return {l:"Na ceste",c:"b"};
+  return {l:"Zadané",c:""};
+}
+function shipUniPill(s){const u=shipUni(s);const raw=s.status?` title="Stav dopravcu: ${esc(s.status)}"`:"";return `<span class="tag ${u.c}"${raw}>${esc(u.l)}</span>`;}
+// cieľová krajina (posledný diel adresy) — na filter aj zobrazenie
+function shipDestCountry(s){const t=(s.to_address||"").trim();if(!t)return "";const parts=t.split(",").map(x=>x.trim()).filter(Boolean);const last=parts[parts.length-1]||"";return last.length<=24?last:"";}
+// zamknutie zásielky (manuálne; automatické pravidlá doplníme neskôr). Po zamknutí nemožno meniť poznámky (okrem admina).
+function shipCanEdit(s){return canWrite()&&(!s.locked||ME.role==="admin");}
+async function shipToggleLock(id,locked){
+  if(locked&&ME.role!=="admin"&&!canWrite())return;
+  if(locked){if(!confirm("Odomknúť zásielku? Po odomknutí bude opäť možné meniť údaje."))return;}
+  else{if(!confirm("Zamknúť zásielku? Po zamknutí sa poznámky/údaje nebudú dať meniť (okrem admina)."))return;}
+  const upd=locked?{locked:false,locked_at:null,locked_by:null}:{locked:true,locked_at:new Date().toISOString(),locked_by:ME.email||ME.id};
+  const {error}=await sb.from("shipments").update(upd).eq("id",id);
+  if(error){alert(error.message);return;}
+  if(shipMode==="detail"&&shipDetailId===id)shipDetail(id);else shipList();
+}
 function savedShipFilters(){try{return JSON.parse(localStorage.getItem("shsaved_"+ME.id)||"[]");}catch(e){return [];}}
 function shipfSaveNew(){const n=prompt("Názov filtra:");if(!n||!n.trim())return;const a=savedShipFilters();a.push({name:n.trim(),f:{dir:shipFilterDir,q:shipQ,pay:shipPay,track:shipTrackOnly,unrecv:shipUnrecv}});localStorage.setItem("shsaved_"+ME.id,JSON.stringify(a));shipList();}
 function shipfLoad(name){if(!name)return;const x=savedShipFilters().find(z=>z.name===name);if(x){const f=x.f||{};shipFilterDir=f.dir||"";shipQ=f.q||"";shipPay=f.pay||"";shipTrackOnly=!!f.track;shipUnrecv=!!f.unrecv;shipList();}}
@@ -1612,45 +1642,83 @@ async function ship2Track(id){
 }
 async function shipList(){
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
-  const {data,error}=await sb.from("shipments").select("id,tracking_number,carrier,direction,status,sender,from_address,to_address,our_order,contents,expected_date,delivered_on,created_at,label_date,is_paid,customs,incoterm,jds_number,invoice_number,customer_payment,paid_where,pay_amount,pay_currency,ship_cost,ship_cost_cur").order("id",{ascending:false}).limit(500);
+  const {data,error}=await sb.from("shipments").select("id,tracking_number,carrier,direction,status,sender,from_address,to_address,our_order,order_source,contents,descr,expected_date,delivered_on,created_at,label_date,is_paid,payment_method,paid_date,customs,incoterm,jds_number,awb_number,customs_value,duty,vat,invoice_number,customer_payment,paid_where,pay_amount,pay_currency,ship_cost,ship_cost_cur,locked").order("id",{ascending:false}).limit(500);
   if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
   let list=data||[];
   const {data:its}=await sb.from("shipment_items").select("shipment_id,quantity,product_id,products(name)");
   const byShip={};(its||[]).forEach(it=>{(byShip[it.shipment_id]=byShip[it.shipment_id]||[]).push(it);});
   const {data:onwaylots}=await sb.from("stock_lots").select("shipment_id").eq("status","na_ceste");
   const recvShip=new Set();(onwaylots||[]).forEach(l=>{if(l.shipment_id)recvShip.add(l.shipment_id);});
+  // zoznam prepravcov a krajín pre výber vo filtroch (z reálnych dát)
+  const carriersAll=[...new Set(list.map(s=>detectCarrierName(s.carrier,s.tracking_number)||s.carrier).filter(Boolean))].sort();
+  const countriesAll=[...new Set(list.map(shipDestCountry).filter(Boolean))].sort();
   if(shipFilterDir)list=list.filter(s=>s.direction===shipFilterDir);
   if(shipPay==="paid")list=list.filter(s=>s.is_paid);
   if(shipPay==="unpaid")list=list.filter(s=>!s.is_paid);
   if(shipTrackOnly)list=list.filter(s=>!shipClosed(s));
   if(shipUnrecv)list=list.filter(s=>s.direction==="inbound"&&!shipClosed(s));
-  if(shipQ){const q=shipQ.toLowerCase();list=list.filter(s=>((s.tracking_number||"")+" "+(s.carrier||"")+" "+(s.sender||"")+" "+(s.to_address||"")+" "+(s.from_address||"")+" "+(s.contents||"")+" "+(s.jds_number||"")).toLowerCase().includes(q));}
+  if(shipCarrierF)list=list.filter(s=>(detectCarrierName(s.carrier,s.tracking_number)||s.carrier)===shipCarrierF);
+  if(shipStatusF)list=list.filter(s=>shipUni(s).l===shipStatusF);
+  if(shipCountryF)list=list.filter(s=>shipDestCountry(s)===shipCountryF);
+  if(shipCostMin!=="")list=list.filter(s=>Number(s.ship_cost||0)>=Number(shipCostMin));
+  if(shipCostMax!=="")list=list.filter(s=>Number(s.ship_cost||0)<=Number(shipCostMax));
+  const cdate=s=>String(s.label_date||s.created_at||"").slice(0,10);
+  const ddate=s=>String(s.delivered_on||s.expected_date||"").slice(0,10);
+  if(shipCreatedFrom)list=list.filter(s=>cdate(s)&&cdate(s)>=shipCreatedFrom);
+  if(shipCreatedTo)list=list.filter(s=>cdate(s)&&cdate(s)<=shipCreatedTo);
+  if(shipDelivFrom)list=list.filter(s=>ddate(s)&&ddate(s)>=shipDelivFrom);
+  if(shipDelivTo)list=list.filter(s=>ddate(s)&&ddate(s)<=shipDelivTo);
+  if(shipQ){const q=shipQ.toLowerCase();list=list.filter(s=>((s.tracking_number||"")+" "+(s.carrier||"")+" "+(s.sender||"")+" "+(s.to_address||"")+" "+(s.from_address||"")+" "+(s.contents||"")+" "+(s.descr||"")+" "+(s.our_order||"")+" "+(s.invoice_number||"")+" "+(s.jds_number||"")+" "+(s.awb_number||"")).toLowerCase().includes(q));}
+  // zoradenie
+  const num=x=>Number(x||0);
+  const SORTF={new:(a,b)=>b.id-a.id,old:(a,b)=>a.id-b.id,
+    eta:(a,b)=>(ddate(a)||"9999").localeCompare(ddate(b)||"9999"),
+    created:(a,b)=>(cdate(b)||"").localeCompare(cdate(a)||""),
+    costhi:(a,b)=>num(b.ship_cost)-num(a.ship_cost),costlo:(a,b)=>num(a.ship_cost)-num(b.ship_cost)};
+  list=list.slice().sort(SORTF[shipSort]||SORTF.new);
   const dbtn=(v,l)=>`<option value="${v}" ${shipFilterDir===v?"selected":""}>${l}</option>`;
+  const cols=shipCols();const ncols=2+(cols.pay?1:0)+(cols.cost?1:0)+(cols.customs?1:0)+1;
   const rowHtml=(s)=>{const bar=DIRBAR[s.direction]||"#cfd6e2";
     const items=byShip[s.id]||[];const contents=shipContents(s,items);
     const fromPlace=simplifyPlace(s.from_address||s.sender);const toPlace=simplifyPlace(s.to_address);
     const fromFlag=flagFor(s.from_address||s.sender);const toFlag=flagFor(s.to_address);
-    // mená: od koho -> komu
     const fromName=s.sender||fromPlace;
     const toName=((s.to_address||"").split(",")[0])||(s.direction==="inbound"?"Kentino s.r.o.":toPlace);
-    const pay=s.is_paid?`<span class="tag g">zaplatené</span>`:`<span class="tag r">nezaplatené</span>`;
-    const paySub=[s.invoice_number,s.customer_payment,s.paid_where].filter(Boolean).join(" · ");
-    const cost=s.ship_cost?`${fmtNum(s.ship_cost)} ${esc(s.ship_cost_cur||"")}`:"—";
-    const eta=shipDelivered(s)?("doručené"+(s.delivered_on?" "+String(s.delivered_on).slice(0,10):(s.expected_date?" "+String(s.expected_date).slice(0,10):""))):(s.expected_date?"ETA "+String(s.expected_date).slice(0,10):"");
+    const cdt=s.label_date?["vytvorené",String(s.label_date).slice(0,10)]:(s.created_at?["pridané",String(s.created_at).slice(0,10)]:null);
+    const etaLine=shipDelivered(s)?`✅ doručené <b>${esc(s.delivered_on?String(s.delivered_on).slice(0,10):(s.expected_date?String(s.expected_date).slice(0,10):""))}</b>`:(s.expected_date?`${abbr("Odh. doručenie","Odhadovaný dátum doručenia")}: <b>${esc(String(s.expected_date).slice(0,10))}</b>`:"");
+    const lock=s.locked?` <span title="Zamknuté — poznámky nemožno meniť (${esc(s.locked_by||"")})" style="cursor:help">🔒</span>`:"";
     const canRecv=canWrite()&&s.direction==="inbound"&&!shipClosed(s);
-    return `<tr onclick="shipDetail(${s.id})" style="cursor:pointer;background:${shipRowBg(s)}">
-      <td style="border-left:4px solid ${bar}"><b>${esc(s.tracking_number)}</b>${copyBtn(s.tracking_number)}<div class="psub">${esc(s.carrier||"")} · ${dirBadge(s.direction)} ${s.customs?`<span class="tag r">colné</span>`:""} ${s.incoterm?`<span class="tag">${esc(s.incoterm)}</span>`:""}</div>${s.our_order?`<div class="psub">Obj.: ${esc(s.our_order)}</div>`:""}${s.label_date?`<div class="psub">vytvorené: ${esc(String(s.label_date).slice(0,10))}</div>`:(s.created_at?`<div class="psub">pridané: ${esc(String(s.created_at).slice(0,10))}</div>`:"")}</td>
-      <td><b>${fromFlag} ${esc(fromName)} → ${toFlag} ${esc(toName)}</b>${(s.from_address||s.to_address)?`<div class="psub">${esc(s.from_address||fromPlace)} → ${esc(s.to_address||toPlace)}</div>`:""}${contents?`<div class="psub">📦 ${contents}</div>`:""}</td>
-      <td>${shipStatusCell(s)}${eta?`<div class="psub">${esc(eta)}</div>`:""}</td>
-      <td>${pay}${paySub?`<div class="psub">${paySub}</div>`:""}<div class="psub">doprava: ${cost}</div></td>
-      <td style="white-space:nowrap" onclick="event.stopPropagation()">${(canWrite()&&!shipClosed(s))?`<button class="btn ghost sm" title="Overiť stav u prepravcu" onclick="shipUpsTrack(${s.id})">🔄</button> `:""}${canRecv?`<button class="btn green sm" onclick="shipReceive(${s.id})">✓ Prijať</button> `:""}<button class="btn ghost sm" onclick="shipDetail(${s.id})">Upraviť</button></td></tr>`;};
-  // zoskupenie do sekcií podľa stavu (zadané → na ceste → doručené → uzavreté)
-  const thead=`<colgroup><col style="width:21%"><col style="width:33%"><col style="width:16%"><col style="width:22%"><col style="width:8%"></colgroup><thead><tr><th>Tracking</th><th>Trasa (od → komu)</th><th>Stav / riešenie</th><th>Platba / doprava</th><th></th></tr></thead>`;
-  let table;
-  if(!list.length)table=`<div class="muted">Žiadne zásielky.</div>`;
-  else{table="";SHIP_STAGES.forEach(st=>{const grp=list.filter(s=>shipStageRank(s)===st.r);if(!grp.length)return;
-    table+=`<div class="card"><h3 style="margin:0 0 8px"><span class="tag ${st.cls}">${esc(st.label)}</span> <span class="muted" style="font-weight:400">${grp.length}</span></h3>
-      <div class="ptbl-wrap"><table class="ptbl shipfix">${thead}<tbody>${grp.map(rowHtml).join("")}</tbody></table></div></div>`;});}
+    // stĺpec: objednávka / platba
+    const payMethod=s.payment_method?esc(SHIP_PAYM[s.payment_method]||s.payment_method):"";
+    const payAmt=s.pay_amount?esc(s.pay_amount)+" "+esc(s.pay_currency||""):"";
+    const payState=s.is_paid?`<span class="tag g">zaplatené</span>`:`<span class="tag r">nezaplatené</span>`;
+    const payCol=cols.pay?`<td>${s.our_order?`<b>${esc(s.our_order)}</b>`:`<span class="muted">—</span>`}${(payMethod||payAmt)?`<div class="psub">${payMethod}${payAmt?" · "+payAmt:""}</div>`:""}<div class="psub">${payState}${s.paid_date?` · zapl. <b>${esc(String(s.paid_date).slice(0,10))}</b>`:""}</div></td>`:"";
+    // stĺpec: doprava (cena) + clo/DPH
+    const cost=s.ship_cost?`<b>${fmtNum(s.ship_cost)} ${esc(s.ship_cost_cur||"")}</b>`:`<span class="muted">—</span>`;
+    const dutyVat=[s.duty?`clo ${esc(s.duty)}`:"",s.vat?abbr("DPH","Daň z pridanej hodnoty")+" "+esc(s.vat):""].filter(Boolean).join(" · ");
+    const costCol=cols.cost?`<td>${cost}${dutyVat?`<div class="psub">${dutyVat}</div>`:""}</td>`:"";
+    // stĺpec: colné (AWB / JDS)
+    const customsCol=cols.customs?`<td>${s.customs?`${s.awb_number?`<div class="psub">${abbr("AWB","Air Waybill — letecký nákladný list")}: <b>${esc(s.awb_number)}</b></div>`:""}${s.jds_number?`<div class="psub">${abbr("JDS","Jednotný správny doklad (colné konanie)")}: <b>${esc(s.jds_number)}</b></div>`:""}${(!s.awb_number&&!s.jds_number)?`<span class="tag o">colné</span>`:""}`:`<span class="muted">—</span>`}</td>`:"";
+    const actions=`<td style="white-space:nowrap" onclick="event.stopPropagation()">${(canWrite()&&!shipClosed(s))?`<button class="btn ghost sm" title="Zistiť stav u prepravcu" onclick="shipUpsTrack(${s.id})">🔄</button> `:""}${canRecv?`<button class="btn green sm" title="Prijať zásielku na sklad" onclick="shipReceive(${s.id})">✓ Prijať</button> `:""}${canWrite()?`<button class="btn ghost sm" title="${s.locked?"Odomknúť":"Zamknúť"} zásielku" onclick="shipToggleLock(${s.id},${s.locked?"true":"false"})">${s.locked?"🔓":"🔒"}</button> `:""}<button class="btn ghost sm" title="Upraviť zásielku" onclick="shipDetail(${s.id})">Upraviť</button></td>`;
+    const main=`<tr onclick="shipToggleExpand(${s.id})" style="cursor:pointer;background:${shipRowBg(s)}">
+      <td style="border-left:4px solid ${bar};max-width:170px"><b>${esc(s.tracking_number)}</b>${copyBtn(s.tracking_number)}<div class="psub"><b>${esc(detectCarrierName(s.carrier,s.tracking_number)||s.carrier||"")}</b> · ${dirBadge(s.direction)}${s.incoterm?` <span class="tag">${esc(s.incoterm)}</span>`:""}</div>${cdt?`<div class="psub">${cdt[0]}: <b>${esc(cdt[1])}</b></div>`:""}</td>
+      <td><b>${fromFlag} ${esc(fromName)} → ${toFlag} ${esc(toName)}</b>${lock}<div style="margin-top:2px">${shipUniPill(s)}</div>${etaLine?`<div class="psub">${etaLine}</div>`:""}${contents?`<div class="psub">📦 ${contents}</div>`:""}</td>
+      ${payCol}${costCol}${customsCol}${actions}</tr>`;
+    const exp=shipExpandId===s.id?`<tr class="shipexprow"><td colspan="${ncols}" style="background:var(--bg-2);padding:0"><div id="shipexp_${s.id}" style="padding:14px 16px">Načítavam detail…</div></td></tr>`:"";
+    return main+exp;};
+  const th=(inner)=>`<th>${inner}</th>`;
+  const heads=[th("Zásielka"),th("Trasa / stav")]
+    .concat(cols.pay?[th(abbr("Objedn. / platba","Objednávka, cena, spôsob a dátum platby"))]:[])
+    .concat(cols.cost?[th("Doprava")]:[])
+    .concat(cols.customs?[th(abbr("Colné","Colné konanie — AWB a JDS číslo"))]:[])
+    .concat([th("")]).join("");
+  const thead=`<thead><tr>${heads}</tr></thead>`;
+  const table=list.length?`<div class="ptbl-wrap"><table class="ptbl">${thead}<tbody>${list.map(rowHtml).join("")}</tbody></table></div>`:`<div class="muted">Žiadne zásielky pre daný filter.</div>`;
+  const csel=(v,l)=>`<option value="${v}" ${shipCarrierF===v?"selected":""}>${esc(l)}</option>`;
+  const ssel=(v,l)=>`<option value="${v}" ${shipStatusF===v?"selected":""}>${esc(l)}</option>`;
+  const cosel=(v,l)=>`<option value="${v}" ${shipCountryF===v?"selected":""}>${esc(l)}</option>`;
+  const sort=(v,l)=>`<option value="${v}" ${shipSort===v?"selected":""}>${esc(l)}</option>`;
+  const colToggles=SHIP_COL_DEFS.map(c=>`<label class="tagchip ${cols[c.k]?"on":""}" style="cursor:pointer;border:1px solid var(--line-2)" onclick="shipColToggle('${c.k}')">${cols[c.k]?"☑":"☐"} ${esc(c.l)}</label>`).join("");
   $("#view").innerHTML=`
   <div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
     ${canWrite()?`<button class="btn sm" onclick="shipQuickTrack()">⚡ Rýchle: tracking</button><button class="btn green sm" onclick="shipForm()">+ Nová zásielka</button>`:""}
@@ -1658,18 +1726,46 @@ async function shipList(){
     <button class="btn ghost sm" onclick="shipCarriers()">🚚 Prepravcovia</button>
     <button class="btn ghost sm" onclick="shipExport()">⬇ Export (Excel/CSV)</button></div></div>
   <div class="card">
-    <div class="toolbar"><input placeholder="Hľadať tracking / prepravca / adresu…" value="${esc(shipQ)}" oninput="shipQ=this.value;shipList()">
+    <div class="toolbar"><input placeholder="🔎 Hľadať čokoľvek — tracking, meno/mesto príjemcu, objednávka, faktúra, JDS/AWB…" value="${esc(shipQ)}" oninput="shipQ=this.value;shipList()">
+      <select onchange="shipSort=this.value;shipList()">${sort("new","Zoradiť: najnovšie")}${sort("old","Najstaršie")}${sort("eta","Najbližšie doručenie")}${sort("created","Podľa vytvorenia")}${sort("costhi","Doprava: najdrahšie")}${sort("costlo","Doprava: najlacnejšie")}</select></div>
+    <div class="toolbar">
       <select onchange="shipFilterDir=this.value;shipList()">${dbtn("","Všetky smery")}${dbtn("inbound","Prichádzajúce (k nám)")}${dbtn("outbound","Odchádzajúce (od nás)")}${dbtn("dropship","Dropship")}</select>
+      <select onchange="shipCarrierF=this.value;shipList()"><option value="">Prepravca (všetci)</option>${carriersAll.map(c=>csel(c,c)).join("")}</select>
+      <select onchange="shipStatusF=this.value;shipList()"><option value="">Stav (všetko)</option>${["Zadané","Na ceste","Doručené","Rieši sa"].map(x=>ssel(x,x)).join("")}</select>
+      <select onchange="shipCountryF=this.value;shipList()"><option value="">Krajina doručenia (všetky)</option>${countriesAll.map(c=>cosel(c,c)).join("")}</select>
       <select onchange="shipPay=this.value;shipList()"><option value="" ${shipPay===""?"selected":""}>Platba (všetko)</option><option value="paid" ${shipPay==="paid"?"selected":""}>zaplatené</option><option value="unpaid" ${shipPay==="unpaid"?"selected":""}>nezaplatené</option></select>
-      <label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${shipTrackOnly?"checked":""} onchange="shipTrackOnly=this.checked;shipList()"> Len na sledovanie</label>
-      <label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${shipUnrecv?"checked":""} onchange="shipUnrecv=this.checked;shipList()"> Neprijaté</label></div>
+    </div>
+    <div class="toolbar" style="align-items:center">
+      <span class="muted" style="font-size:12px">Cena dopravy:</span>
+      <input type="number" placeholder="od" style="max-width:90px" value="${esc(shipCostMin)}" oninput="shipCostMin=this.value;clearTimeout(window._shf);window._shf=setTimeout(shipList,500)">
+      <input type="number" placeholder="do" style="max-width:90px" value="${esc(shipCostMax)}" oninput="shipCostMax=this.value;clearTimeout(window._shf);window._shf=setTimeout(shipList,500)">
+      <span class="muted" style="font-size:12px">${abbr("Vytvorené","Dátum vytvorenia zásielky")}:</span>
+      <input type="date" style="max-width:150px" value="${esc(shipCreatedFrom)}" onchange="shipCreatedFrom=this.value;shipList()">
+      <input type="date" style="max-width:150px" value="${esc(shipCreatedTo)}" onchange="shipCreatedTo=this.value;shipList()">
+      <span class="muted" style="font-size:12px">Doručenie:</span>
+      <input type="date" style="max-width:150px" value="${esc(shipDelivFrom)}" onchange="shipDelivFrom=this.value;shipList()">
+      <input type="date" style="max-width:150px" value="${esc(shipDelivTo)}" onchange="shipDelivTo=this.value;shipList()">
+    </div>
     <div class="inline" style="gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
-      <button class="btn ghost sm" onclick="shipfReset()">✕ Filtre</button>
+      <label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${shipTrackOnly?"checked":""} onchange="shipTrackOnly=this.checked;shipList()"> Len na sledovanie</label>
+      <label class="chk" style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${shipUnrecv?"checked":""} onchange="shipUnrecv=this.checked;shipList()"> Neprijaté</label>
+      <button class="btn ghost sm" onclick="shipfResetAll()">✕ Zrušiť filtre</button>
       <select style="width:auto" onchange="shipfLoad(this.value)"><option value="">Uložené filtre…</option>${savedShipFilters().map(f=>`<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select>
       <button class="btn ghost sm" onclick="shipfSaveNew()">💾 Uložiť filter</button>
       <button class="btn ghost sm" onclick="shipfManage()">🗑</button></div>
-    <div class="muted">${list.length} zásielok · zoradené po sekciách podľa stavu</div></div>
+    <div class="inline" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px"><span class="muted" style="font-size:12px">Zobraziť stĺpce:</span>${colToggles}</div>
+    <div class="muted">${list.length} zásielok · klik na riadok rozbalí detail</div></div>
   ${table}`;
+  if(shipExpandId&&list.some(s=>s.id===shipExpandId))setTimeout(()=>shipExpandFill(shipExpandId),0);
+}
+function shipfResetAll(){shipFilterDir="";shipQ="";shipPay="";shipTrackOnly=false;shipUnrecv=false;shipCarrierF="";shipStatusF="";shipCountryF="";shipCostMin="";shipCostMax="";shipCreatedFrom="";shipCreatedTo="";shipDelivFrom="";shipDelivTo="";shipSort="new";shipList();}
+function shipToggleExpand(id){shipExpandId=(shipExpandId===id?null:id);shipList();}
+async function shipExpandFill(id){const el=$("#shipexp_"+id);if(!el)return;
+  const {data:s}=await sb.from("shipments").select("*").eq("id",id).single();
+  if(!s){el.innerHTML=`<span class="muted">Nedá sa načítať.</span>`;return;}
+  const {data:its}=await sb.from("shipment_items").select("id,quantity,product_id,products(name)").eq("shipment_id",id);
+  const {data:lots}=await sb.from("stock_lots").select("id,status").eq("shipment_id",id);
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Detail zásielky</b><button class="btn ghost sm" onclick="shipDetail(${id})">⤢ Otvoriť v samostatnom okne</button></div>`+shipDetailHTML(s,its||[],lots||[]);
 }
 // prehľad: aké dáta sa dajú získať u jednotlivých prepravcov (cez API vs. z portálu po prihlásení)
 const CARRIER_INFO=[
@@ -1956,39 +2052,89 @@ async function shipSave(){
   $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Zásielka ${esc(trk)} uložená.</div>`);
 }
 let shipDetailId=null;
-async function shipDetail(id){navHash("ship/"+id);
-  shipDetailId=id;
+// zdieľané telo detailu (použité v samostatnom okne aj pri rozbalení v zozname)
+function shipDetailHTML(s,its,lots){
+  const id=s.id;const canEdit=shipCanEdit(s);
+  const row=(l,v,full)=>(v!==null&&v!==undefined&&v!=="")?`<div class="lot"><div class="m">${full?abbr(l,full):esc(l)}</div><div><b>${v}</b></div></div>`:"";
+  const sec=(t)=>`<h4 style="margin:14px 0 4px;font-size:12px;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--line);padding-bottom:3px">${esc(t)}</h4>`;
+  const prodOpts=DATA.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  const inStock=(lots&&lots.length)?` <span class="tag o">v zásobách „doručuje sa" (${lots.length})</span>`:"";
+  const itemsHtml=(its&&its.length)?its.map(i=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center"><div>${fmtNum(i.quantity)}× ${esc((i.products&&i.products.name)||"?")}</div>${canEdit?`<button class="btn red sm" onclick="shipItemDel(${i.id})">×</button>`:""}</div>`).join(""):`<div class="muted">Zatiaľ bez tovaru. ${s.direction==="inbound"?"Doplní sa pri naskladnení, alebo pridaj ručne.":""}</div>`;
+  // dobierka/QV tlačidlo
+  const isUPS=detectCarrierName(s.carrier,s.tracking_number)==="UPS";
+  // trasa (časová os) z uloženého trackingu
+  const acts=(s.tracking_json&&Array.isArray(s.tracking_json.activity))?s.tracking_json.activity:[];
+  const tl=acts.length?acts.slice(0,20).map((a,i)=>`<div class="ev ${i===0?"now":""}"><div class="when">${esc(a.date||"")}</div><div class="r"><div class="nd"></div></div><div class="tx"><div class="stt">${esc(a.status||"")}</div>${a.location?`<div class="loc">${esc(a.location)}</div>`:""}</div></div>`).join(""):`<div class="muted" style="font-size:12.5px">Zatiaľ bez trasy — klikni „🔄 Zistiť stav u prepravcu".</div>`;
+  const dutyPayer={my:"My (odosielateľ)",prijemca:"Príjemca",tretia:"Tretia strana"}[s.duty_payer]||"";
+  return SHIP2_CSS+`<div class="s2" style="max-width:none">
+    ${sec("Zhrnutie")}
+    ${row("Prepravca",esc(detectCarrierName(s.carrier,s.tracking_number)||s.carrier||"?"))}
+    ${row("Smer (podľa adries)",dirBadge(s.direction)+" "+esc((DIRS[s.direction]||["",""])[0]))}
+    ${row("Stav",shipUniPill(s)+(s.status?` <span class="muted" style="font-size:12px">(${esc(s.status)})</span>`:""))}
+    ${row("Odhadované doručenie",shipDelivered(s)?("✅ doručené "+esc(s.delivered_on?String(s.delivered_on).slice(0,10):"")):(s.expected_date?"<b>"+esc(String(s.expected_date).slice(0,10))+"</b>":""))}
+    ${row("Odosielateľ / dodávateľ",esc(s.sender||""))}${row("Odkiaľ (adresa)",esc(s.from_address||""))}${row("Doručiť kam",esc(s.to_address||""))}
+    ${sec("Dátumy")}
+    ${row("Vytvorené (podľa dopravcu)",s.label_date?esc(String(s.label_date).slice(0,10)):"")}
+    <div class="lot"><div class="m">Pridané do systému <span class="muted" style="font-size:11px">(needitovateľné)</span></div><div><b>${esc(String(s.created_at||"").slice(0,10))}</b></div></div>
+    ${s.received_on?row("Prijaté dňa",esc(String(s.received_on).slice(0,10))):""}
+    ${sec("Objednávka a platba")}
+    ${row("Objednávka",[s.our_order,s.order_source].filter(Boolean).map(esc).join(" · "))}
+    <div class="lot"><div class="m">Platba</div><div><b>${s.payment_method?esc(SHIP_PAYM[s.payment_method]||s.payment_method):"—"}${s.pay_amount?" · "+esc(s.pay_amount)+" "+esc(s.pay_currency||""):""} · ${s.is_paid?`<span class="tag g">zaplatené</span>`:`<span class="tag r">nezaplatené</span>`}</b>${canEdit?` <button class="btn ghost sm" onclick="shipTogglePaid(${id},${s.is_paid?"true":"false"})">${s.is_paid?"Označiť nezaplatené":"✓ Zaplatené"}</button>`:""}${(canEdit&&isUPS)?` <button class="btn ghost sm" title="Overiť dobierku cez UPS Quantum View" onclick="shipQVPay(${id})">💶 Dobierka (QV)</button>`:""}</div></div>
+    ${row("Dátum zaplatenia",s.paid_date?esc(String(s.paid_date).slice(0,10)):"")}
+    ${row("Kde/čím zaplatené",esc(s.paid_where||""))}${row("Krypto TX",esc(s.crypto_tx||""))}${row("Faktúra",esc(s.invoice_number||""))}${row("Platba zákazníka",esc(s.customer_payment||""))}
+    ${s.customs?`${sec("Colné konanie")}
+      ${row("JDS","<b>"+esc(s.jds_number||"—")+"</b>","Jednotný správny doklad")}
+      ${row("AWB",esc(s.awb_number||""),"Air Waybill — letecký nákladný list")}
+      ${row("Faktúra pre colné účely",esc(s.invoice_number||""))}
+      ${row("Colná hodnota",esc(s.customs_value||""))}${row("Clo",esc(s.duty||""))}${row("DPH",esc(s.vat||""),"Daň z pridanej hodnoty")}
+      ${row("Clo a DPH platí",esc(dutyPayer))}${row("Mimo EÚ",s.non_eu?"áno":"")}${row("Poplatok za spracovanie",esc(s.processing_fee||""))}`:""}
+    ${sec("Cena prepravy")}
+    ${row("Cena prepravy (platíme my)",s.ship_cost?"<b>"+esc(s.ship_cost)+" "+esc(s.ship_cost_cur||"")+"</b>":"— (z faktúry dopravcu)")}
+    ${row("Faktúra za dopravu",esc(s.invoice_number||""))}
+    ${row("Dodacia podmienka",esc(s.incoterm||""),"Incoterm — dodacia doložka")}${row("Poistná suma",s.insured_value?esc(s.insured_value+" "+(s.insured_cur||"")):"")}
+    ${sec("Parametre a popis")}
+    ${row("Hmotnosť",esc(s.weight||(s.tracking_json&&s.tracking_json.weight)||""))}${row("Rozmery",esc(s.dimensions||""))}
+    <div class="lot"><div class="m">Popis (napr. nebezpečný materiál) — vyhľadateľné</div><div><b>${esc(s.descr||"—")}</b>${canEdit?` <button class="btn ghost sm" onclick="shipEditMeta(${id})">✎ Upraviť hmotnosť / rozmery / popis</button>`:""}</div></div>
+    ${row("Obsah (poznámka)",esc(s.contents||""))}
+    <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--blue)">🗺️ Roztvoriť trasu zásielky (${acts.length})</summary>
+      ${s.tracking_at?`<div class="muted" style="font-size:11px;margin:6px 0">Naposledy stiahnuté: ${esc(String(s.tracking_at).replace("T"," ").slice(0,16))}</div>`:""}
+      <div class="tl" style="margin-top:8px">${tl}</div></details>
+    <h4 style="margin:14px 0 4px">Tovar v zásielke${inStock}</h4>${itemsHtml}
+    ${canEdit?`<div class="row2" style="margin-top:8px"><div><label>Produkt</label><select id="si_prod_${id}">${prodOpts}</select></div><div><label>Množstvo</label><input id="si_qty_${id}" type="number" min="1" value="1"></div></div>
+      <div class="inline" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="shipItemAdd(${id})">+ Pridať tovar</button>${(s.direction==="inbound"&&(!lots||!lots.length))?`<button class="btn sm" onclick="shipItemsToStock(${id})">📦 Vytvoriť skladové položky (na ceste)</button>`:""}</div>`:(s.locked?`<div class="muted" style="font-size:12px;margin-top:6px">🔒 Zásielka je zamknutá — úpravy môže robiť len admin.</div>`:"")}
+  </div>`;
+}
+async function shipDetail(id){navHash("ship/"+id);shipMode="detail";shipDetailId=id;
   const {data:s,error}=await sb.from("shipments").select("*").eq("id",id).single();
   if(error){alert(error.message);return;}
   const {data:its}=await sb.from("shipment_items").select("id,quantity,product_id,products(name)").eq("shipment_id",id);
   const {data:lots}=await sb.from("stock_lots").select("id,status").eq("shipment_id",id);
-  const d=DIRS[s.direction]||["?",""];
-  const row=(l,v)=>(v!==null&&v!==undefined&&v!=="")?`<div class="lot"><div class="m">${esc(l)}</div><b>${esc(v)}</b></div>`:"";
-  const prodOpts=DATA.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
-  const itemsHtml=(its||[]).map(i=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center"><div>${fmtNum(i.quantity)}× ${esc((i.products&&i.products.name)||"?")}</div>${canWrite()?`<button class="btn red sm" onclick="shipItemDel(${i.id})">×</button>`:""}</div>`).join("")||`<div class="muted">Bez položiek.</div>`;
-  const inStock=(lots&&lots.length)?`<span class="tag o">v zásobách ako „doručuje sa" (${lots.length})</span>`:"";
-  $("#view").innerHTML=`<div class="card"><div class="chosen"><div><span class="tag ${d[1]}">${d[0]}</span> <b>${esc(s.tracking_number)}</b>${copyBtn(s.tracking_number)}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${(canWrite()&&!shipClosed(s))?`<button class="btn sm" onclick="shipUpsTrack(${id})">🔄 Zistiť stav u prepravcu</button>`:""}<button class="btn ghost sm" onclick="shipPOD(${id})">🧾 Proof of Delivery</button><button class="btn ghost sm" onclick="shipList()">Späť</button></div></div>
-    ${s.tracking_at?`<div class="muted" style="margin-bottom:6px">Naposledy stiahnuté od prepravcu: ${esc(String(s.tracking_at).replace("T"," ").slice(0,16))} · údaje sú uložené v systéme (aj po expirácii u prepravcu).</div>`:""}
+  const d=DIRS[s.direction]||["?",""];const canEdit=shipCanEdit(s);
+  $("#view").innerHTML=`<div class="card">
+    <div class="chosen"><div><span class="tag ${d[1]}">${d[0]}</span> <b>${esc(s.tracking_number)}</b>${copyBtn(s.tracking_number)}${s.locked?` <span title="Zamknuté" style="cursor:help">🔒</span>`:""}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${(canWrite()&&!shipClosed(s))?`<button class="btn sm" onclick="shipUpsTrack(${id})">🔄 Zistiť stav u prepravcu</button>`:""}<button class="btn ghost sm" onclick="shipPOD(${id})">🧾 ${abbr("POD","Proof of Delivery — potvrdenie o doručení")}</button>${canWrite()?`<button class="btn ghost sm" onclick="shipToggleLock(${id},${s.locked?"true":"false"})">${s.locked?"🔓 Odomknúť":"🔒 Zamknúť"}</button>`:""}<button class="btn ghost sm" onclick="shipMode='list';shipList()">← Späť na zoznam</button></div></div>
+    ${s.locked?`<div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">🔒 <b>Zamknuté</b>${s.locked_at?" · "+esc(String(s.locked_at).replace("T"," ").slice(0,16)):""}${s.locked_by?" · "+esc(s.locked_by):""} — poznámky a údaje nie je možné meniť${ME.role==="admin"?" (ako admin môžeš).":"."}</div>`:""}
     <div id="ship_upsmsg"></div>
-    ${row("Prepravca",s.carrier)}
-    <div class="lot"><div class="m">Smer (určený automaticky z adries)</div><b>${dirBadge(s.direction)} ${esc((DIRS[s.direction]||["",""])[0])}</b></div>
-    ${row("Stav",s.status)}
-    ${row("Vytvorené (podľa dopravcu)",s.label_date?String(s.label_date).slice(0,10):"")}
-    ${row("Pridané do systému",s.created_at?String(s.created_at).slice(0,10):"")}
-    ${row("Odosielateľ / dodávateľ",s.sender)}${row("Odkiaľ (adresa)",s.from_address)}${row("Doručiť kam",s.to_address)}
-    ${row("Objednávka",[s.our_order,s.order_source].filter(Boolean).join(" · "))}${row("Predpokladané doručenie",s.expected_date?String(s.expected_date).slice(0,10):"")}${row("Prijaté dňa",s.received_on?String(s.received_on).slice(0,10):"")}${row("Obsah (poznámka)",s.contents)}
-    ${row("Dodacia podmienka (incoterm)",s.incoterm)}${row("Cena prepravy (platíme my)",s.ship_cost?s.ship_cost+" "+(s.ship_cost_cur||""):"")}${row("Poistná suma",s.insured_value?s.insured_value+" "+(s.insured_cur||""):"")}
-    ${s.customs?row("Colné konanie (JDS)",s.jds_number||"áno"):""}${row("Mimo EÚ",s.non_eu?"áno":"")}${row("AWB / prepravný list",s.awb_number)}${row("Colná hodnota",s.customs_value)}${row("Clo",s.duty)}${row("DPH",s.vat)}${row("Clo a DPH platí",{my:"My (odosielateľ)",prijemca:"Príjemca",tretia:"Tretia strana"}[s.duty_payer]||"")}${row("Poplatok za spracovanie",s.processing_fee)}
-    <div class="lot"><div class="m">Platba</div><b>${s.payment_method?esc(SHIP_PAYM[s.payment_method]||s.payment_method)+" · ":""}${s.is_paid?`<span class="tag g">zaplatené</span>`:`<span class="tag r">nezaplatené</span>`}${s.pay_amount?" · "+esc(s.pay_amount)+" "+esc(s.pay_currency||""):""}</b>${canWrite()?` <button class="btn ghost sm" onclick="shipTogglePaid(${id},${s.is_paid?"true":"false"})">${s.is_paid?"Označiť nezaplatené":"✓ Zaplatené (dobierka)"}</button>`:""}${(canWrite()&&detectCarrierName(s.carrier,s.tracking_number)==="UPS")?` <button class="btn ghost sm" title="Overiť dobierku cez UPS Quantum View" onclick="shipQVPay(${id})">💶 Overiť dobierku (Quantum View)</button>`:""}</div>
-    ${row("Kde/čím zaplatené",s.paid_where)}${row("Krypto TX",s.crypto_tx)}${row("Faktúra",s.invoice_number)}${row("Platba zákazníka",s.customer_payment)}${row("Cena prepravy (platíme my)",s.ship_cost?s.ship_cost+" "+(s.ship_cost_cur||""):"")}
-    <h4 style="margin-top:12px">Položky zásielky ${inStock}</h4>${itemsHtml}
-    ${canWrite()?`<div class="row2" style="margin-top:8px"><div><label>Produkt</label><select id="si_prod">${prodOpts}</select></div><div><label>Množstvo</label><input id="si_qty" type="number" min="1" value="1"></div></div>
-    <div class="inline" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="shipItemAdd(${id})">+ Pridať položku</button>${(s.direction==="inbound"&&(!lots||!lots.length))?`<button class="btn sm" onclick="shipItemsToStock(${id})">📦 Vytvoriť skladové položky (na ceste)</button>`:""}</div>`:""}
-    ${canDelete()?`<button class="btn red" onclick="shipDelete(${id})" style="margin-top:12px">🗑 Zmazať zásielku</button>`:""}</div>`;
+    ${shipDetailHTML(s,its||[],lots||[])}
+    ${canDelete()&&canEdit?`<button class="btn red" onclick="shipDelete(${id})" style="margin-top:14px">🗑 Zmazať zásielku</button>`:""}
+  </div>`;
 }
-async function shipItemAdd(id){const pid=Number($("#si_prod").value);const qty=Number($("#si_qty").value||1);if(!pid)return;
-  const {error}=await sb.from("shipment_items").insert({shipment_id:id,product_id:pid,quantity:qty});if(error){alert(error.message);return;}shipDetail(id);}
-async function shipItemDel(itemId){const {error}=await sb.from("shipment_items").delete().eq("id",itemId);if(error){alert(error.message);return;}if(shipDetailId)shipDetail(shipDetailId);}
+// úprava fyzických parametrov + popisu (rýchlo cez prompt; plný editačný formulár doplníme)
+async function shipEditMeta(id){
+  const {data:s}=await sb.from("shipments").select("weight,dimensions,descr,locked").eq("id",id).single();
+  if(!s)return;if(s.locked&&ME.role!=="admin"){alert("Zásielka je zamknutá.");return;}
+  const weight=prompt("Hmotnosť (napr. 12,5 kg):",s.weight||"");if(weight===null)return;
+  const dimensions=prompt("Rozmery (napr. 60×40×40 cm):",s.dimensions||"");if(dimensions===null)return;
+  const descr=prompt("Popis (napr. nebezpečný materiál / ADR) — vyhľadateľné:",s.descr||"");if(descr===null)return;
+  const {error}=await sb.from("shipments").update({weight:weight.trim()||null,dimensions:dimensions.trim()||null,descr:descr.trim()||null}).eq("id",id);
+  if(error){alert(error.message);return;}
+  if(shipMode==="detail"&&shipDetailId===id)shipDetail(id);else{shipExpandId=id;shipList();}
+}
+// po úprave detailu: obnov buď samostatné okno, alebo rozbalený riadok v zozname
+function shipRerender(sid){if(shipMode==="detail"&&shipDetailId){shipDetail(shipDetailId);}else{if(sid)shipExpandId=sid;shipList();}}
+async function shipItemAdd(id){const pe=$("#si_prod_"+id)||$("#si_prod");const qe=$("#si_qty_"+id)||$("#si_qty");const pid=Number(pe&&pe.value);const qty=Number((qe&&qe.value)||1);if(!pid)return;
+  const {error}=await sb.from("shipment_items").insert({shipment_id:id,product_id:pid,quantity:qty});if(error){alert(error.message);return;}shipRerender(id);}
+async function shipItemDel(itemId){const sid=shipMode==="detail"?shipDetailId:shipExpandId;const {error}=await sb.from("shipment_items").delete().eq("id",itemId);if(error){alert(error.message);return;}shipRerender(sid);}
 // vytvorí skladové položky zo zásielky so stavom na_ceste (zobrazia sa v Zásobách ako „doručuje sa")
 async function shipItemsToStock(id){
   const {data:s}=await sb.from("shipments").select("expected_date").eq("id",id).single();
@@ -1999,7 +2145,7 @@ async function shipItemsToStock(id){
   const rows=its.filter(i=>i.product_id).map(i=>({product_id:i.product_id,warehouse_id:wh,track:"bulk",quantity:i.quantity||1,status:"na_ceste",state:"new",shipment_id:id,expected_date:s?s.expected_date:null,note:"doručuje sa"}));
   const {error}=await sb.from("stock_lots").insert(rows);
   if(error){alert(error.message);return;}
-  shipDetail(id);
+  shipRerender(id);
 }
 // stiahni Proof of Delivery (uložený snapshot) ako samostatný HTML súbor
 async function shipPOD(id){
@@ -2105,7 +2251,7 @@ async function shipUpsTrack(id){
 }
 async function shipDelete(id){if(!confirm("Zmazať zásielku?"))return;const {error}=await sb.from("shipments").delete().eq("id",id);if(error){alert(error.message);return;}shipList();}
 async function shipSetDir(id,dir){const {error}=await sb.from("shipments").update({direction:dir}).eq("id",id);if(error){alert(error.message);return;}shipDetail(id);}
-async function shipTogglePaid(id,cur){const o={is_paid:!cur};if(!cur&&!confirm("Označiť zásielku ako zaplatenú (dobierka)?"))return;const {error}=await sb.from("shipments").update(o).eq("id",id);if(error){alert(error.message);return;}shipDetail(id);}
+async function shipTogglePaid(id,cur){const o={is_paid:!cur};if(!cur){if(!confirm("Označiť zásielku ako zaplatenú?"))return;o.paid_date=new Date().toISOString().slice(0,10);}else{o.paid_date=null;}const {error}=await sb.from("shipments").update(o).eq("id",id);if(error){alert(error.message);return;}shipRerender(id);}
 // Overenie dobierky cez UPS Quantum View (C.O.D. collected)
 async function shipQVPay(id){
   const {data:s}=await sb.from("shipments").select("tracking_number,carrier,is_paid").eq("id",id).single();
