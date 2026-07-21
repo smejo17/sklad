@@ -826,10 +826,27 @@ function lotEdit(id){const l=stockLots.find(x=>x.id===id);if(!l)return;
     <div><label>Mena</label><select id="le_cur"><option ${l.buy_currency==="CZK"?"selected":""}>CZK</option><option ${l.buy_currency==="EUR"?"selected":""}>EUR</option><option ${l.buy_currency==="USD"?"selected":""}>USD</option></select></div></div>
     <div class="row2"><div><label>Dátum nákupu</label><input id="le_date" type="date" value="${esc(l.buy_date?String(l.buy_date).slice(0,10):"")}"></div>
     <div><label>Faktúra</label><input id="le_inv" value="${esc(l.invoice_number||"")}"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><label style="margin:0">Fotky tovaru <span class="muted" style="font-weight:400;font-size:11px">(uchovávajú sa pri tomto kuse)</span></label>${canWrite()?`<button class="btn ghost sm" type="button" onclick="leAddPhoto(${id})">📷 Pridať fotku</button>`:""}</div>
+    <div id="le_photos" class="muted" style="font-size:12px;margin-top:4px">Načítavam…</div>
     <div class="muted" style="font-size:12px;margin-top:12px">Zo skladu sa nič nemaže. Ak tovar fyzicky nie je, urob <b>výdaj</b> s účelom <b>inventúra</b> alebo <b>oprava skladových zásob</b>.</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px">${canWrite()?`<button class="btn ghost" style="width:auto" onclick="closeModal();lotIssue(${id})">− Vydať / opraviť stav</button>`:"<span></span>"}<button class="btn" style="width:auto" onclick="lotEditSave(${id})">Uložiť</button></div>`);
-  leFillLoc(l.location_id);
+  leFillLoc(l.location_id);leLoadPhotos(id);
 }
+// fotky konkrétneho tovaru (šarže) — lot_photos + fotky sériových čísel
+async function leLoadPhotos(id){
+  const box=$("#le_photos");if(!box)return;
+  const [rp,rs]=await Promise.all([
+    sb.from("lot_photos").select("id,url").eq("lot_id",id),
+    sb.from("lot_serials").select("id,serial,photo_url").eq("lot_id",id)
+  ]);
+  const items=[];
+  (rp.data||[]).forEach(x=>items.push({kind:"photo",id:x.id,url:x.url,label:""}));
+  (rs.data||[]).forEach(x=>{if(x.photo_url)items.push({kind:"serial",id:x.id,url:x.photo_url,label:x.serial||"SN"});});
+  if(!items.length){box.innerHTML=`<span class="muted" style="font-size:12px">Zatiaľ bez fotiek.</span>`;return;}
+  box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">`+items.map(it=>`<div style="position:relative"><img src="${esc(it.url)}" style="width:74px;height:74px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in" onclick="window.open('${esc(it.url)}','_blank')" data-tip="${it.kind==="serial"?"SN "+esc(it.label):"fotka tovaru"} — klik zväčší">${it.kind==="photo"&&canWrite()?`<button class="btn red sm" style="position:absolute;top:2px;right:2px;padding:0 5px;line-height:1.5" onclick="lePhotoDel(${it.id},${id})">×</button>`:""}</div>`).join("")+`</div>`;
+}
+async function leAddPhoto(id){pickPhoto("lots",async(url)=>{const {error}=await sb.from("lot_photos").insert({lot_id:id,url});if(error){alert(error.message);return;}leLoadPhotos(id);});}
+async function lePhotoDel(photoId,id){if(!confirm("Zmazať túto fotku tovaru? (Fotka, nie skladová položka.)"))return;const {error}=await sb.from("lot_photos").delete().eq("id",photoId);if(error){alert(error.message);return;}leLoadPhotos(id);}
 function leFillLoc(sel){const arr=locsOf($("#le_wh").value);$("#le_loc").innerHTML=`<option value="">—</option>`+arr.map(l=>`<option value="${l.id}" ${sel&&l.id===sel?"selected":""}>${esc(l.code)}${l.description?" — "+esc(l.description):""}</option>`).join("");}
 // odfotiť štítok a rozpoznať sériové číslo (AI) — doplní pole SN v úprave šarže
 async function lotSnPhoto(){
