@@ -99,7 +99,18 @@ async function loadData(){
   ]);
   DATA.products=p.data||[];DATA.warehouses=w.data||[];DATA.locations=l.data||[];DATA.categories=c.data||[];DATA.brands=b.data||[];
   DATA.tags=tg.data||[];DATA.ptags=pt.data||[];DATA.attrDefs=ad.data||[];DATA.pattrs=pa.data||[];
+  // majetok: provozovne, miestnosti, osoby
+  const [prem,rooms,pers]=await Promise.all([
+    sb.from("asset_premises").select("id,name,address,sort_order").order("sort_order"),
+    sb.from("asset_rooms").select("id,premise_id,name,sort_order").order("sort_order"),
+    sb.from("asset_persons").select("id,name,email,note,active,sort_order").order("sort_order")
+  ]);
+  DATA.premises=prem.data||[];DATA.rooms=rooms.data||[];DATA.persons=pers.data||[];
 }
+function premiseName(id){const x=DATA.premises.find(p=>p.id===id);return x?x.name:"";}
+function roomName(id){const x=DATA.rooms.find(r=>r.id===id);return x?x.name:"";}
+function personName(id){const x=DATA.persons.find(p=>p.id===id);return x?x.name:"";}
+function roomsOfPremise(pid){return DATA.rooms.filter(r=>String(r.premise_id)===String(pid));}
 function catAncestors(catId){const ids=[];let id=catId,g=0;while(id!=null&&g++<10){ids.push(Number(id));const c=DATA.categories.find(x=>x.id===id);id=c?c.parent_id:null;}return ids;}
 function attrDefsForCat(catId){if(!catId)return [];const anc=new Set(catAncestors(Number(catId)));return DATA.attrDefs.filter(d=>anc.has(Number(d.category_id))).sort((a,b)=>((a.sort_order||0)-(b.sort_order||0))||(a.label||"").localeCompare(b.label||""));}
 function productAttrList(pid){const vals=DATA.pattrs.filter(x=>x.product_id===pid);return vals.map(v=>{const d=DATA.attrDefs.find(x=>x.id===v.attr_def_id);return d?{label:d.label,unit:d.unit,value:v.value}:null;}).filter(Boolean);}
@@ -2715,100 +2726,168 @@ async function repairReceipt(id){
 }
 
 // ===== MAJETOK (firemný majetok používaný na prácu) =====
-let assetQ="",assetGroup="room",assetFRoom="",assetFHolder="",assetPhoto="",assetPrefill=null;
+let assetQ="",assetGroup="person",assetFPremise="",assetFPerson="",assetPhoto="",assetPrefill=null,assetAssign="none";
 const ASSET_STATE={new:["nové","g"],used:["používané","b"],broken:["pokazené","r"]};
 function assetName(a){return a.name||((DATA.products.find(p=>p.id===a.product_id)||{}).name)||"(bez názvu)";}
+function assetAssignHtml(a){
+  if(a.person_id)return `👤 ${esc(personName(a.person_id)||("osoba #"+a.person_id))}`;
+  if(a.room_id)return `📍 ${esc(roomName(a.room_id)||"")}${a.premise_id?" · "+esc(premiseName(a.premise_id)):""}`;
+  if(a.premise_id)return `🏢 ${esc(premiseName(a.premise_id))}`;
+  if(a.holder)return `👤 ${esc(a.holder)}`;
+  if(a.room)return `📍 ${esc(a.room)}`;
+  return `<span class="muted">— nepridelené —</span>`;
+}
+async function assetLogMove(assetId,action,to,note){try{await sb.from("asset_movements").insert({asset_id:assetId,action,person_id:(to&&to.person_id)||null,room_id:(to&&to.room_id)||null,premise_id:(to&&to.premise_id)||null,note:note||null,by_user:ME.email||null});}catch(e){}}
 function renderAssets(){
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
-  sb.from("assets").select("*").order("id",{ascending:false}).limit(1000).then(({data,error})=>{
+  sb.from("assets").select("*").order("id",{ascending:false}).limit(2000).then(({data,error})=>{
     if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
     let list=data||[];
-    if(assetFRoom)list=list.filter(a=>(a.room||"")===assetFRoom);
-    if(assetFHolder)list=list.filter(a=>(a.holder||"")===assetFHolder);
-    if(assetQ){const q=assetQ.toLowerCase();list=list.filter(a=>((assetName(a))+" "+(a.serial||"")+" "+(a.manager||"")+" "+(a.holder||"")+" "+(a.room||"")+" "+(a.note||"")).toLowerCase().includes(q));}
-    const rooms=[...new Set((data||[]).map(a=>a.room).filter(Boolean))].sort();
-    const holders=[...new Set((data||[]).map(a=>a.holder).filter(Boolean))].sort();
+    if(assetFPremise)list=list.filter(a=>String(a.premise_id||"")===assetFPremise||String((DATA.rooms.find(r=>r.id===a.room_id)||{}).premise_id||"")===assetFPremise);
+    if(assetFPerson)list=list.filter(a=>String(a.person_id||"")===assetFPerson);
+    if(assetQ){const q=assetQ.toLowerCase();list=list.filter(a=>((assetName(a))+" "+(a.serial||"")+" "+(a.qr_code||"")+" "+(personName(a.person_id)||"")+" "+(roomName(a.room_id)||"")+" "+(premiseName(a.premise_id)||"")+" "+(a.holder||"")+" "+(a.room||"")+" "+(a.note||"")).toLowerCase().includes(q));}
     const stTag=s=>{const m=ASSET_STATE[s]||[s||"—",""];return `<span class="tag ${m[1]}">${esc(m[0])}</span>`;};
     const rowH=a=>`<tr onclick="assetDetail(${a.id})" style="cursor:pointer">
-      <td><b>${esc(assetName(a))}</b>${a.serial?`<div class="psub">SN: ${esc(a.serial)}${copyBtn(a.serial)}</div>`:""}</td>
-      <td>${esc(a.holder||"—")}${a.manager?`<div class="psub">správca: ${esc(a.manager)}</div>`:""}</td>
-      <td>${esc(a.room||"—")}</td>
+      <td><b>${esc(assetName(a))}</b>${a.serial?`<div class="psub">SN: ${esc(a.serial)}</div>`:""}${a.qr_code?`<div class="psub mono">${esc(a.qr_code)}</div>`:""}</td>
+      <td>${assetAssignHtml(a)}</td>
       <td>${stTag(a.state)}</td>
       <td>${esc(a.acquired_at?String(a.acquired_at).slice(0,10):"—")}</td></tr>`;
-    // zoskupenie podľa zvoleného kľúča
-    const keyOf=a=>assetGroup==="room"?(a.room||"— bez miestnosti —"):assetGroup==="holder"?(a.holder||"— nepridelené —"):assetGroup==="manager"?(a.manager||"— bez správcu —"):"Všetok majetok";
+    const keyOf=a=>assetGroup==="person"?(a.person_id?("👤 "+personName(a.person_id)):"— nepridelené —")
+      :assetGroup==="room"?(a.room_id?("📍 "+roomName(a.room_id)+(a.premise_id?" · "+premiseName(a.premise_id):"")):(a.holder?"👤 "+a.holder:"— bez miestnosti —"))
+      :assetGroup==="premise"?(a.premise_id?("🏢 "+premiseName(a.premise_id)):((DATA.rooms.find(r=>r.id===a.room_id)||{}).premise_id?"🏢 "+premiseName((DATA.rooms.find(r=>r.id===a.room_id)||{}).premise_id):"— bez provozovne —")):"Všetok majetok";
     const groups={};list.forEach(a=>{const k=keyOf(a);(groups[k]=groups[k]||[]).push(a);});
     const keys=Object.keys(groups).sort((x,y)=>x.localeCompare(y));
-    const thead=`<thead><tr><th>Položka</th><th>Užívateľ / správca</th><th>Budova / miestnosť</th><th>Stav</th><th>Nadobudnuté</th></tr></thead>`;
+    const thead=`<thead><tr><th>Položka</th><th>Priradené</th><th>Stav</th><th>Nadobudnuté</th></tr></thead>`;
     let sections=list.length?keys.map(k=>`<div class="card"><h3 style="margin:0 0 8px">${esc(k)} <span class="muted" style="font-weight:400">${groups[k].length}</span></h3>
       <div class="ptbl-wrap"><table class="ptbl">${thead}<tbody>${groups[k].map(rowH).join("")}</tbody></table></div></div>`).join(""):`<div class="card"><div class="muted">Žiadny majetok.</div></div>`;
     const gsel=(v,l)=>`<option value="${v}" ${assetGroup===v?"selected":""}>${l}</option>`;
     $("#view").innerHTML=`
-    <div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap;justify-content:flex-end">
-      ${canWrite()?`<button class="btn green sm" onclick="assetForm(0)">+ Nový majetok</button><button class="btn sm" onclick="assetPickFromStock()">📦 Presunúť zo skladu</button>`:""}
-      <button class="btn ghost sm" onclick="assetExport()">⬇ Export (CSV)</button></div></div>
     <div class="card">
-      <div class="toolbar"><input placeholder="Hľadať (názov / SN / správca / užívateľ / miestnosť)…" value="${esc(assetQ)}" oninput="assetQ=this.value;renderAssets()">
-        <select onchange="assetGroup=this.value;renderAssets()">${gsel("room","Zoskupiť: miestnosť")}${gsel("holder","Zoskupiť: užívateľ")}${gsel("manager","Zoskupiť: správca")}${gsel("none","Bez zoskupenia")}</select>
-        <select onchange="assetFRoom=this.value;renderAssets()"><option value="">Miestnosť (všetky)</option>${rooms.map(r=>`<option ${assetFRoom===r?"selected":""}>${esc(r)}</option>`).join("")}</select>
-        <select onchange="assetFHolder=this.value;renderAssets()"><option value="">Užívateľ (všetci)</option>${holders.map(h=>`<option ${assetFHolder===h?"selected":""}>${esc(h)}</option>`).join("")}</select></div>
-      <div class="muted">${list.length} položiek · zoskupené podľa: ${assetGroup==="room"?"miestnosť":assetGroup==="holder"?"užívateľ":assetGroup==="manager"?"správca":"—"}</div></div>
+      <div class="inline" style="gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div><b style="font-size:15px">Majetok</b> <span class="muted" style="font-size:12px">${list.length} položiek</span></div>
+        <div class="inline" style="gap:6px;flex-wrap:wrap">
+          ${canWrite()?`<button class="btn green sm" onclick="assetForm(0)">+ Nový majetok</button><button class="btn sm" onclick="assetPickFromStock()">📦 Zo skladu</button><button class="btn ghost sm" onclick="renderAssetAdmin()">🏢 Evidencia</button>`:""}
+          <button class="btn ghost sm" onclick="assetExport()">⬇ Export</button></div>
+      </div>
+      <div style="border-top:1px solid var(--line-2);margin-bottom:8px"></div>
+      <div class="toolbar"><input id="assetQ" placeholder="Hľadať (názov / SN / QR / osoba / miestnosť)…" value="${esc(assetQ)}" oninput="assetQ=this.value;searchInput('assetQ',renderAssets)" style="flex:2 1 220px">
+        <select onchange="assetGroup=this.value;renderAssets()">${gsel("person","Zoskupiť: osoba")}${gsel("room","Zoskupiť: miestnosť")}${gsel("premise","Zoskupiť: provozovňa")}${gsel("none","Bez zoskupenia")}</select>
+        <select onchange="assetFPremise=this.value;renderAssets()"><option value="">Provozovňa (všetky)</option>${DATA.premises.map(pr=>`<option value="${pr.id}" ${assetFPremise==String(pr.id)?"selected":""}>${esc(pr.name)}</option>`).join("")}</select>
+        <select onchange="assetFPerson=this.value;renderAssets()"><option value="">Osoba (všetky)</option>${DATA.persons.map(pe=>`<option value="${pe.id}" ${assetFPerson==String(pe.id)?"selected":""}>${esc(pe.name)}${pe.active===false?" (ukončený)":""}</option>`).join("")}</select></div>
+    </div>
     ${sections}`;
+    restoreSearchFocus();
   });
 }
+// ===== SPRÁVA EVIDENCIE: provozovne / miestnosti / osoby =====
+function renderAssetAdmin(){
+  const premRows=DATA.premises.map(pr=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div><b>${esc(pr.name)}</b>${pr.address?`<div class="psub">${esc(pr.address)}</div>`:""}<div class="psub">${roomsOfPremise(pr.id).length} miestností</div></div>
+    <div class="inline" style="gap:4px"><button class="btn ghost sm" onclick="apEditPremise(${pr.id})">✏️</button><button class="btn red sm" onclick="apDelPremise(${pr.id})">×</button></div></div>`).join("")||`<div class="muted">Žiadne provozovne.</div>`;
+  const premOpts=DATA.premises.map(pr=>`<option value="${pr.id}">${esc(pr.name)}</option>`).join("");
+  const roomRows=DATA.rooms.map(r=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div><b>${esc(r.name)}</b> <span class="muted">· ${esc(premiseName(r.premise_id))}</span></div>
+    <button class="btn red sm" onclick="apDelRoom(${r.id})">×</button></div>`).join("")||`<div class="muted">Žiadne miestnosti.</div>`;
+  const persRows=DATA.persons.map(pe=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div><b>${esc(pe.name)}</b>${pe.active===false?` <span class="tag">ukončený</span>`:""}${pe.email?`<div class="psub">${esc(pe.email)}</div>`:""}</div>
+    <div class="inline" style="gap:4px"><button class="btn ghost sm" onclick="apEditPerson(${pe.id})">✏️</button>${pe.active!==false?`<button class="btn ghost sm" data-tip="Ukončiť osobu — jej majetok sa uvoľní (nepridelené)" onclick="apEndPerson(${pe.id})">⎋ Ukončiť</button>`:""}<button class="btn red sm" onclick="apDelPerson(${pe.id})">×</button></div></div>`).join("")||`<div class="muted">Žiadne osoby.</div>`;
+  $("#view").innerHTML=`<div class="card"><div class="chosen"><b>Evidencia majetku</b><button class="btn ghost sm" onclick="setTab('assets')">← Späť na majetok</button></div></div>
+  <div class="card"><h4>🏢 Provozovne</h4>${premRows}
+    <div class="inline" style="gap:6px;margin-top:8px"><input id="ap_prem" placeholder="Nová provozovňa (názov)"><input id="ap_premaddr" placeholder="Adresa (nepovinné)"><button class="btn green sm" onclick="apAddPremise()">+ Pridať</button></div></div>
+  <div class="card"><h4>📍 Miestnosti</h4>${roomRows}
+    <div class="inline" style="gap:6px;margin-top:8px"><select id="ap_roomprem" style="flex:0 1 180px"><option value="">— provozovňa —</option>${premOpts}</select><input id="ap_room" placeholder="Názov miestnosti"><button class="btn green sm" onclick="apAddRoom()">+ Pridať</button></div></div>
+  <div class="card"><h4>👤 Osoby</h4>${persRows}
+    <div class="inline" style="gap:6px;margin-top:8px"><input id="ap_person" placeholder="Meno osoby"><input id="ap_personmail" placeholder="E-mail (nepovinné)"><button class="btn green sm" onclick="apAddPerson()">+ Pridať</button></div></div>`;
+}
+async function apAddPremise(){const n=($("#ap_prem").value||"").trim();if(!n)return;const addr=($("#ap_premaddr").value||"").trim()||null;const {error}=await sb.from("asset_premises").insert({name:n,address:addr,sort_order:(DATA.premises.length+1)});if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apEditPremise(id){const pr=DATA.premises.find(x=>x.id===id);if(!pr)return;const n=prompt("Názov provozovne:",pr.name);if(n===null)return;const addr=prompt("Adresa:",pr.address||"");const {error}=await sb.from("asset_premises").update({name:n.trim()||pr.name,address:(addr||"").trim()||null}).eq("id",id);if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apDelPremise(id){if(!confirm("Zmazať provozovňu aj jej miestnosti?"))return;const {error}=await sb.from("asset_premises").delete().eq("id",id);if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apAddRoom(){const prem=$("#ap_roomprem").value;const n=($("#ap_room").value||"").trim();if(!prem||!n){alert("Vyber provozovňu a napíš názov miestnosti.");return;}const {error}=await sb.from("asset_rooms").insert({premise_id:Number(prem),name:n,sort_order:(DATA.rooms.length+1)});if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apDelRoom(id){if(!confirm("Zmazať miestnosť?"))return;const {error}=await sb.from("asset_rooms").delete().eq("id",id);if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apAddPerson(){const n=($("#ap_person").value||"").trim();if(!n)return;const mail=($("#ap_personmail").value||"").trim()||null;const {error}=await sb.from("asset_persons").insert({name:n,email:mail,active:true,sort_order:(DATA.persons.length+1)});if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apEditPerson(id){const pe=DATA.persons.find(x=>x.id===id);if(!pe)return;const n=prompt("Meno osoby:",pe.name);if(n===null)return;const mail=prompt("E-mail:",pe.email||"");const {error}=await sb.from("asset_persons").update({name:n.trim()||pe.name,email:(mail||"").trim()||null}).eq("id",id);if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apDelPerson(id){const {count}=await sb.from("assets").select("id",{count:"exact",head:true}).eq("person_id",id);if(count){alert("Osoba má pridelený majetok ("+count+"). Najprv ju ukonči (⎋) alebo majetok prepriraď.");return;}if(!confirm("Zmazať osobu?"))return;const {error}=await sb.from("asset_persons").delete().eq("id",id);if(error){alert(error.message);return;}await loadData();renderAssetAdmin();}
+async function apEndPerson(id){const pe=DATA.persons.find(x=>x.id===id);if(!pe)return;
+  const {data:mine}=await sb.from("assets").select("id").eq("person_id",id);
+  const n=(mine||[]).length;
+  if(!confirm("Ukončiť osobu „"+pe.name+"“? Jej "+n+" položiek majetku sa uvoľní (nepridelené, k dispozícii na preradenie)."))return;
+  for(const a of (mine||[])){await sb.from("assets").update({person_id:null}).eq("id",a.id);await assetLogMove(a.id,"unassign",{},"ukončenie osoby: "+pe.name);}
+  await sb.from("asset_persons").update({active:false}).eq("id",id);
+  await loadData();renderAssetAdmin();
+}
+// ===== FORMULÁR MAJETKU =====
 function assetForm(id){
   assetPhoto="";
   const pre=assetPrefill||{};assetPrefill=null;
-  const load=id?sb.from("assets").select("*").eq("id",id).single():Promise.resolve({data:{state:"used",manager:ME.email,...pre}});
+  const load=id?sb.from("assets").select("*").eq("id",id).single():Promise.resolve({data:{state:"used",...pre}});
   load.then(({data:a})=>{
     assetPhoto=a.image_url||"";
+    assetAssign=a.person_id?"person":(a.room_id?"room":"none");
     const prodOpts=DATA.products.map(p=>`<option value="${esc(p.name)}"></option>`).join("");
     const prodName=a.product_id?((DATA.products.find(p=>p.id===a.product_id)||{}).name||""):(pre._prodName||"");
     const stOpts=Object.keys(ASSET_STATE).map(s=>`<option value="${s}" ${a.state===s?"selected":""}>${ASSET_STATE[s][0]}</option>`).join("");
+    const personOpts=DATA.persons.filter(pe=>pe.active!==false||pe.id===a.person_id).map(pe=>`<option value="${pe.id}" ${a.person_id===pe.id?"selected":""}>${esc(pe.name)}</option>`).join("");
+    const premOpts=DATA.premises.map(pr=>`<option value="${pr.id}" ${a.premise_id===pr.id?"selected":""}>${esc(pr.name)}</option>`).join("");
     $("#view").innerHTML=`<div class="card"><h2>${id?"Upraviť":"Nový"} majetok</h2>
       ${a.source_lot||pre.source_lot?`<div class="msg ok">Vzniká presunom zo skladu — po uložení sa kus vyskladní.</div>`:""}
       <label>Produkt z katalógu (nepovinné)</label><input id="as_prod" list="asProdList" value="${esc(prodName)}" placeholder="ak je z katalógu"><datalist id="asProdList">${prodOpts}</datalist>
       <label>Názov (ak nie je z katalógu)</label><input id="as_name" value="${esc(a.name||"")}">
       <div class="row2"><div><label>Sériové číslo</label><input id="as_serial" value="${esc(a.serial||"")}"></div>
       <div><label>Stav</label><select id="as_state">${stOpts}</select></div></div>
-      <div class="row2"><div><label>Užívateľ (kto ho má)</label><input id="as_holder" value="${esc(a.holder||"")}" placeholder="napr. M. Beno"></div>
-      <div><label>Správca (zodpovedný)</label><input id="as_manager" value="${esc(a.manager||"")}"></div></div>
-      <div class="row2"><div><label>Budova / miestnosť</label><input id="as_room" value="${esc(a.room||"")}" placeholder="napr. Zasadačka"></div>
-      <div><label>Nadobudnuté dňa</label><input id="as_acq" type="date" value="${esc(a.acquired_at?String(a.acquired_at).slice(0,10):"")}"></div></div>
-      <label>Poznámka</label><input id="as_note" value="${esc(a.note||"")}">
+      <label>QR kód (pridelí sa automaticky, ak necháš prázdne)</label><input id="as_qr" value="${esc(a.qr_code||"")}" placeholder="AST-…">
+      <hr style="border:0;border-top:1px solid var(--line);margin:12px 0 8px">
+      <label>Priradiť</label><select id="as_assign" onchange="asFillAssign()"><option value="person" ${assetAssign==="person"?"selected":""}>Osobe</option><option value="room" ${assetAssign==="room"?"selected":""}>Do miestnosti / provozovne</option><option value="none" ${assetAssign==="none"?"selected":""}>Nepridelené (sklad majetku)</option></select>
+      <div id="as_personwrap" style="margin-top:6px"><label>Osoba</label><select id="as_person"><option value="">— vyber osobu —</option>${personOpts}</select></div>
+      <div id="as_roomwrap" style="margin-top:6px"><div class="row2"><div><label>Provozovňa</label><select id="as_premise" onchange="asFillRooms()"><option value="">— provozovňa —</option>${premOpts}</select></div>
+        <div><label>Miestnosť</label><select id="as_room2"></select></div></div></div>
+      <hr style="border:0;border-top:1px solid var(--line);margin:12px 0 8px">
+      <div class="row2"><div><label>Nadobudnuté dňa</label><input id="as_acq" type="date" value="${esc(a.acquired_at?String(a.acquired_at).slice(0,10):"")}"></div>
+      <div><label>Poznámka</label><input id="as_note" value="${esc(a.note||"")}"></div></div>
       <input id="as_img" type="hidden" value="${esc(a.image_url||"")}">
       <label>Fotka</label><div id="as_imgwrap">${a.image_url?`<img src="${esc(a.image_url)}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`:`<span class="muted">bez fotky</span>`}</div>
       <button class="btn ghost sm" type="button" onclick="assetAddPhoto()">📷 Nahrať fotku</button>
       <input type="hidden" id="as_srclot" value="${esc(a.source_lot||pre.source_lot||"")}">
-      <button class="btn green" id="as_save" onclick="assetSave(${id||0})">Uložiť</button>
-      <button class="btn ghost" onclick="setTab('assets')">Späť</button><div id="as_msg"></div></div>`;
+      <div style="margin-top:12px"><button class="btn green" id="as_save" onclick="assetSave(${id||0})" style="width:auto">Uložiť</button>
+      <button class="btn ghost" onclick="setTab('assets')" style="width:auto">Späť</button></div><div id="as_msg"></div></div>`;
+    asFillAssign();asFillRooms(a.room_id);
   });
 }
+function asFillAssign(){const v=($("#as_assign")||{}).value;const pw=$("#as_personwrap"),rw=$("#as_roomwrap");if(pw)pw.style.display=(v==="person")?"":"none";if(rw)rw.style.display=(v==="room")?"":"none";}
+function asFillRooms(sel){const prem=($("#as_premise")||{}).value;const el=$("#as_room2");if(!el)return;el.innerHTML=`<option value="">— miestnosť —</option>`+roomsOfPremise(prem).map(r=>`<option value="${r.id}" ${sel&&r.id===sel?"selected":""}>${esc(r.name)}</option>`).join("");}
 function assetAddPhoto(){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
   inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;try{const blob=await compressImage(f,1200*1024,1600);const url=await uploadPhoto(blob,"assets");assetPhoto=url;$("#as_img").value=url;$("#as_imgwrap").innerHTML=`<img src="${esc(url)}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`;}catch(e){alert("Nahranie zlyhalo: "+(e.message||e));}};inp.click();}
 async function assetSave(id){
   const prodVal=($("#as_prod").value||"").trim();const prod=prodVal?DATA.products.find(p=>(p.name||"").toLowerCase()===prodVal.toLowerCase()):null;
   const srcLot=$("#as_srclot").value?Number($("#as_srclot").value):null;
+  const assign=$("#as_assign").value;
+  const person_id=assign==="person"&&$("#as_person").value?Number($("#as_person").value):null;
+  const room_id=assign==="room"&&$("#as_room2").value?Number($("#as_room2").value):null;
+  const premise_id=assign==="room"&&$("#as_premise").value?Number($("#as_premise").value):null;
   const o={product_id:prod?prod.id:null,name:$("#as_name").value.trim()||null,serial:$("#as_serial").value.trim()||null,
-    state:$("#as_state").value,holder:$("#as_holder").value.trim()||null,manager:$("#as_manager").value.trim()||null,
-    room:$("#as_room").value.trim()||null,acquired_at:$("#as_acq").value||null,note:$("#as_note").value.trim()||null,
-    image_url:$("#as_img").value||null,source_lot:srcLot||null,updated_at:new Date().toISOString()};
+    state:$("#as_state").value,qr_code:$("#as_qr").value.trim()||null,person_id,room_id,premise_id,
+    acquired_at:$("#as_acq").value||null,note:$("#as_note").value.trim()||null,
+    image_url:$("#as_img").value||null,source_lot:srcLot||null,updated_at:new Date().toISOString(),
+    holder:null,room:null,manager:null};
   if(!o.name&&!o.product_id){$("#as_msg").innerHTML=`<div class="msg err">Zadaj názov alebo vyber produkt.</div>`;return;}
   $("#as_save").disabled=true;
-  let err;
+  let newId=id,err;
   if(id){const r=await sb.from("assets").update(o).eq("id",id);err=r.error;}
-  else{const r=await sb.from("assets").insert(o);err=r.error;}
+  else{const r=await sb.from("assets").insert(o).select("id").single();err=r.error;newId=r.data&&r.data.id;}
   if(err){$("#as_save").disabled=false;$("#as_msg").innerHTML=`<div class="msg err">${esc(err.message)}</div>`;return;}
-  // ak vzniká zo skladu — vyskladni pôvodnú šaržu (pohyb výdaj + zruš/zníž šaržu)
+  // QR kód: ak prázdny, prideľ automaticky "AST-<id>"
+  if(newId&&!o.qr_code){await sb.from("assets").update({qr_code:"AST-"+newId}).eq("id",newId);}
+  // pohyb majetku
+  await assetLogMove(newId,id?"edit":"in",{person_id,room_id,premise_id},id?"úprava":"pridané do majetku");
+  // ak vzniká zo skladu — vyskladni pôvodnú šaržu
   if(!id&&srcLot){try{
     const {data:lot}=await sb.from("stock_lots").select("*").eq("id",srcLot).single();
-    if(lot){await sb.from("stock_movements").insert({type:"vydaj",product_id:lot.product_id,lot_id:lot.id,quantity:1,warehouse_id:lot.warehouse_id,location_id:lot.location_id,purpose:"presun do majetku",note:"→ Majetok"});
+    if(lot){const dn=await nextDocNo("vydaj");await sb.from("stock_movements").insert({type:"vydaj",product_id:lot.product_id,lot_id:lot.id,quantity:1,warehouse_id:lot.warehouse_id,location_id:lot.location_id,purpose:"presun do majetku",note:"→ Majetok",doc_no:dn});
       if(lot.track==="unit"||Number(lot.quantity)<=1)await sb.from("stock_lots").delete().eq("id",lot.id);
       else await sb.from("stock_lots").update({quantity:Number(lot.quantity)-1}).eq("id",lot.id);
     }}catch(e){}}
   setTab("assets");
 }
-// presun zo skladu: vyber skladovú šaržu → predvyplní formulár majetku
+// presun zo skladu → predvyplní formulár majetku
 async function assetPickFromStock(){
   $("#view").innerHTML=`<div class="card muted">Načítavam skladové položky…</div>`;
   const {data:lots}=await sb.from("stock_lots").select("id,product_id,warehouse_id,serial,quantity,track,status").eq("status","skladom").order("id",{ascending:false}).limit(1000);
@@ -2816,7 +2895,7 @@ async function assetPickFromStock(){
     return `<tr><td><b>${esc(p.name||"?")}</b>${l.serial?`<div class="psub">SN: ${esc(l.serial)}</div>`:""}</td><td>${esc(wh)}</td><td>${l.track==="unit"?"1 ks":fmtNum(l.quantity)+" ks"}</td>
       <td><button class="btn green sm" onclick="assetFromLot(${l.id})">Presunúť →</button></td></tr>`;}).join("")||`<tr><td colspan="4" class="muted">Sklad je prázdny.</td></tr>`;
   $("#view").innerHTML=`<div class="card"><div class="chosen"><b>Presun zo skladu do majetku</b><button class="btn ghost sm" onclick="setTab('assets')">Späť</button></div>
-    <div class="muted" style="margin-bottom:8px">Vyber skladovú položku — vytvorí sa karta majetku a kus sa vyskladní.</div>
+    <div class="muted" style="margin-bottom:8px">Vyber skladovú položku — vytvorí sa karta majetku a kus sa vyskladní (výdajka).</div>
     <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Produkt</th><th>Sklad</th><th>Množstvo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 async function assetFromLot(lotId){
@@ -2825,35 +2904,67 @@ async function assetFromLot(lotId){
   assetPrefill={product_id:l.product_id,_prodName:p.name||"",serial:l.serial||null,source_lot:l.id,state:"used"};
   assetForm(0);
 }
+// ===== DETAIL MAJETKU =====
 async function assetDetail(id){navHash("assets/"+id);
   const {data:a,error}=await sb.from("assets").select("*").eq("id",id).single();
   if(error){alert(error.message);return;}
-  const row=(l,v)=>(v!==null&&v!==undefined&&v!=="")?`<div class="lot"><div class="m">${esc(l)}</div><b>${esc(v)}</b></div>`:"";
+  const {data:mov}=await sb.from("asset_movements").select("*").eq("asset_id",id).order("happened_at",{ascending:false}).limit(30);
+  const row=(l,v)=>(v!==null&&v!==undefined&&v!=="")?`<div class="lot"><div class="m">${esc(l)}</div><b>${v}</b></div>`:"";
   const st=ASSET_STATE[a.state]||[a.state,""];
+  const ACT={"in":"pridané do majetku","edit":"úprava","assign":"pridelené","unassign":"uvoľnené","move":"presun","tostock":"vrátené na sklad"};
+  const movHtml=(mov&&mov.length)?mov.map(m=>`<div class="lot"><div class="m">${esc(String(m.happened_at||"").replace("T"," ").slice(0,16))}${m.by_user?" · "+esc(m.by_user):""}</div><b>${esc(ACT[m.action]||m.action||"")}</b>${(m.person_id||m.room_id)?` <span class="muted">→ ${m.person_id?esc(personName(m.person_id)):esc(roomName(m.room_id))}</span>`:""}${m.note?`<div class="psub">${esc(m.note)}</div>`:""}</div>`).join(""):`<div class="muted">Bez pohybov.</div>`;
   $("#view").innerHTML=`<div class="card"><div class="chosen"><div><b>${esc(assetName(a))}</b> <span class="tag ${st[1]}">${esc(st[0])}</span></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${canWrite()?`<button class="btn ghost sm" onclick="assetForm(${id})">✏️ Upraviť</button>`:""}${canWrite()?`<button class="btn ghost sm" onclick="assetToStock(${id})">↩︎ Vrátiť na sklad</button>`:""}<button class="btn ghost sm" onclick="setTab('assets')">Späť</button></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${canWrite()?`<button class="btn ghost sm" onclick="assetForm(${id})">✏️ Upraviť</button><button class="btn ghost sm" onclick="assetReassign(${id})">🔁 Prideliť / presunúť</button><button class="btn ghost sm" onclick="assetToStock(${id})">↩︎ Vrátiť na sklad</button>`:""}${copyLinkBtn("assets/"+id)}<button class="btn ghost sm" onclick="setTab('assets')">Späť</button></div></div>
     ${a.image_url?`<img src="${esc(a.image_url)}" style="max-width:200px;border-radius:10px;border:1px solid var(--line);margin:6px 0">`:""}
-    ${row("Sériové číslo",a.serial)}${row("Užívateľ",a.holder)}${row("Správca",a.manager)}${row("Budova / miestnosť",a.room)}
-    ${row("Nadobudnuté",a.acquired_at?String(a.acquired_at).slice(0,10):"")}${row("Poznámka",a.note)}
-    ${canDelete()?`<button class="btn red" onclick="assetDelete(${id})" style="margin-top:12px">🗑 Zmazať</button>`:""}</div>`;
+    ${row("Priradené",assetAssignHtml(a))}
+    ${row("QR kód",a.qr_code?esc(a.qr_code)+copyBtn(a.qr_code):"")}
+    ${row("Sériové číslo",a.serial?esc(a.serial)+copyBtn(a.serial):"")}
+    ${row("Nadobudnuté",a.acquired_at?String(a.acquired_at).slice(0,10):"")}${row("Poznámka",esc(a.note||""))}
+    <h4 style="margin-top:12px">Pohyby</h4>${movHtml}
+    ${canDelete()?`<button class="btn red" onclick="assetDelete(${id})" style="margin-top:12px;width:auto">🗑 Zmazať</button>`:""}</div>`;
+}
+// prideliť/presunúť majetok (osoba alebo miestnosť)
+function assetReassign(id){
+  const personOpts=DATA.persons.filter(pe=>pe.active!==false).map(pe=>`<option value="${pe.id}">${esc(pe.name)}</option>`).join("");
+  const premOpts=DATA.premises.map(pr=>`<option value="${pr.id}">${esc(pr.name)}</option>`).join("");
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Prideliť / presunúť</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+    <label>Priradiť</label><select id="ra_assign" onchange="raToggle()"><option value="person">Osobe</option><option value="room">Do miestnosti / provozovne</option><option value="none">Nepridelené (sklad majetku)</option></select>
+    <div id="ra_personwrap" style="margin-top:6px"><label>Osoba</label><select id="ra_person"><option value="">— vyber —</option>${personOpts}</select></div>
+    <div id="ra_roomwrap" style="margin-top:6px;display:none"><div class="row2"><div><label>Provozovňa</label><select id="ra_premise" onchange="raFillRooms()"><option value="">—</option>${premOpts}</select></div><div><label>Miestnosť</label><select id="ra_room"></select></div></div></div>
+    <label>Poznámka</label><input id="ra_note" placeholder="napr. dôvod presunu">
+    <div style="text-align:right;margin-top:12px"><button class="btn" style="width:auto" onclick="assetReassignDo(${id})">Uložiť</button></div>`);
+  raToggle();raFillRooms();
+}
+function raToggle(){const v=$("#ra_assign").value;$("#ra_personwrap").style.display=(v==="person")?"":"none";$("#ra_roomwrap").style.display=(v==="room")?"":"none";}
+function raFillRooms(){const prem=($("#ra_premise")||{}).value;const el=$("#ra_room");if(el)el.innerHTML=`<option value="">— miestnosť —</option>`+roomsOfPremise(prem).map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");}
+async function assetReassignDo(id){
+  const v=$("#ra_assign").value;const note=$("#ra_note").value.trim()||null;
+  const person_id=v==="person"&&$("#ra_person").value?Number($("#ra_person").value):null;
+  const room_id=v==="room"&&$("#ra_room").value?Number($("#ra_room").value):null;
+  const premise_id=v==="room"&&$("#ra_premise").value?Number($("#ra_premise").value):null;
+  const {error}=await sb.from("assets").update({person_id,room_id,premise_id,updated_at:new Date().toISOString()}).eq("id",id);
+  if(error){alert(error.message);return;}
+  await assetLogMove(id,v==="none"?"unassign":(person_id?"assign":"move"),{person_id,room_id,premise_id},note);
+  closeModal();assetDetail(id);
 }
 async function assetDelete(id){if(!confirm("Zmazať túto položku majetku?"))return;const {error}=await sb.from("assets").delete().eq("id",id);if(error){alert(error.message);return;}setTab("assets");}
-// vrátenie majetku späť na sklad (vytvorí skladovú šaržu + pohyb príjem)
+// vrátenie majetku späť na SKLAD tovaru (len ak je naviazaný na produkt)
 async function assetToStock(id){
   const {data:a}=await sb.from("assets").select("*").eq("id",id).single();if(!a)return;
-  if(!a.product_id){alert("Vrátiť na sklad možno len majetok naviazaný na produkt z katalógu.");return;}
-  if(!confirm("Vrátiť "+assetName(a)+" na sklad?"))return;
-  const wh=(DATA.warehouses[0]||{}).id||null;
+  if(!a.product_id){alert("Vrátiť na sklad tovaru možno len majetok naviazaný na produkt z katalógu. Inak ho nechaj v majetku ako nepridelený (Prideliť → Nepridelené).");return;}
+  if(!confirm("Vrátiť "+assetName(a)+" na sklad tovaru?"))return;
+  const wh=(DATA.warehouses[0]||{}).id||null;const dn=await nextDocNo("prijem");
   const {data:lot,error}=await sb.from("stock_lots").insert({product_id:a.product_id,warehouse_id:wh,track:"unit",quantity:1,serial:a.serial||null,status:"skladom",state:a.state==="broken"?"used":(a.state||"used"),note:"vrátené z majetku"}).select("id").single();
   if(error){alert(error.message);return;}
-  await sb.from("stock_movements").insert({type:"prijem",product_id:a.product_id,lot_id:lot&&lot.id,quantity:1,warehouse_id:wh,purpose:"vrátenie z majetku",note:"Majetok → sklad"});
+  await sb.from("stock_movements").insert({type:"prijem",product_id:a.product_id,lot_id:lot&&lot.id,quantity:1,warehouse_id:wh,purpose:"vrátenie z majetku",note:"Majetok → sklad",doc_no:dn});
+  await assetLogMove(id,"tostock",{},"vrátené na sklad tovaru");
   await sb.from("assets").delete().eq("id",id);
   setTab("assets");
 }
 async function assetExport(){
-  const {data}=await sb.from("assets").select("*").order("room");
-  const rows=(data||[]).map(a=>[assetName(a),a.serial||"",a.holder||"",a.manager||"",a.room||"",(ASSET_STATE[a.state]||[a.state])[0],a.acquired_at||"",a.note||""]);
-  const head=["Položka","Sériové číslo","Užívateľ","Správca","Budova/miestnosť","Stav","Nadobudnuté","Poznámka"];
+  const {data}=await sb.from("assets").select("*").order("id");
+  const rows=(data||[]).map(a=>[assetName(a),a.serial||"",a.qr_code||"",personName(a.person_id)||a.holder||"",roomName(a.room_id)||a.room||"",premiseName(a.premise_id)||"",(ASSET_STATE[a.state]||[a.state])[0],a.acquired_at||"",a.note||""]);
+  const head=["Položka","Sériové číslo","QR","Osoba","Miestnosť","Provozovňa","Stav","Nadobudnuté","Poznámka"];
   const csv=[head,...rows].map(r=>r.map(c=>`"${String(c==null?"":c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);
   const a=document.createElement("a");a.href=url;a.download="majetok.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
