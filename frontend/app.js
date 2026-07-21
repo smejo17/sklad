@@ -174,7 +174,7 @@ const RENDER={recv:renderRecv,issue:renderIssue,stock:loadStock,prods:renderProd
 // len zvýrazní tab + hlavičku (bez vykreslenia obsahu)
 function markTab(t){tab=t;
   TABS.forEach(x=>{const b=$("#tab_"+x);if(b)b.classList.toggle("on",x===t);const n=$("#nav_"+x);if(n)n.classList.toggle("on",x===t);});
-  const ti=TAB_TITLE[t]||["Sklad",""];$("#pageTitle").textContent=ti[0];$("#pageSub").textContent=ti[1];}
+  const ti=TAB_TITLE[t]||["Sklad",""];const pt=$("#pageTitle");if(pt)pt.textContent=ti[0];const ps=$("#pageSub");if(ps)ps.textContent=ti[1];}
 function setTab(t){markTab(t);$("#view").className="";RENDER[t]();navHash(t);}
 
 // ===== ROUTING (hash v adrese — zdieľateľné odkazy + tlačidlá Späť/Vpred) =====
