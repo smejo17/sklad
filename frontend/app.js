@@ -19,8 +19,14 @@ document.addEventListener("scroll",_tipHide,true);
 let DATA={products:[],warehouses:[],locations:[],categories:[],brands:[]};
 let recvSel=null, issueLots=[], issueSel=null, prodEdit=undefined, tab="recv";
 const REASONS=["predaj","presun medzi skladmi","likvidácia","reklamácia","oprava","vzorka / test","strata","inventúra (oprava stavu)","oprava skladových zásob","iné"];
+const BUY_SOURCES=["faktúra","cenník dodávateľa","odhad","predchádzajúci nákup","manuálne"];
 // oprávnenia sa načítajú podľa roly z role_permissions (viď onLogin)
 const hasPerm=(code)=>ME.role==="admin"||ME.perms.includes(code);
+// koľko minút po prvom pohybe možno ešte dopĺňať doklad (mimo admina / oprávnenia doc.edit.unlimited)
+const DOC_ADD_WINDOW_MIN=1440; // 24 h — dá sa upraviť podľa potreby
+function docAddAllowed(oldestTs){if(ME.role==="admin"||hasPerm("doc.edit.unlimited"))return true;if(!oldestTs)return true;return ((Date.now()-new Date(oldestTs).getTime())/60000)<=DOC_ADD_WINDOW_MIN;}
+// odkaz (deep-link) na konkrétnu položku — na preposlanie medzi užívateľmi
+function copyLinkBtn(hash){const url=(location.origin+location.pathname+"#"+hash).replace(/'/g,"\\'");return `<button class="btn ghost sm" data-tip="Kopírovať odkaz na túto položku (dá sa preposlať)" onclick="copyText('${url}');this.textContent='✓ Odkaz skopírovaný';setTimeout(()=>this.textContent='🔗 Odkaz',1400)">🔗 Odkaz</button>`;}
 const canWrite=()=>ME.role==="admin"||hasPerm("inventory.move")||hasPerm("product.edit")||hasPerm("shipment.edit");
 const canDelete=()=>ME.role==="admin"||hasPerm("product.delete");
 
@@ -194,10 +200,13 @@ function route(){
   const raw=decodeURIComponent((location.hash||"").replace(/^#\/?/,""));
   if(!raw){setTab("recv");return;}
   const i=raw.indexOf("/");const t=i<0?raw:raw.slice(0,i);const id=i<0?"":raw.slice(i+1);
+  if(t==="lot"&&id){markTab("stock");$("#view").className="";lotRoute(Number(id));navHash("lot/"+id);return;}
   if(!TABS.includes(t)||(ADMIN_TABS.includes(t)&&ME.role!=="admin")){setTab("recv");return;}
   if(id&&DETAIL[t]){markTab(t);$("#view").className="";DETAIL[t](/^\d+$/.test(id)?Number(id):id);navHash(t+"/"+id);return;}
   setTab(t);
 }
+// deep-link na konkrétny tovar (šaržu): načíta zásoby a otvorí úpravu tovaru
+async function lotRoute(id){tab="stock";await loadStock();const l=(stockLots||[]).find(x=>x.id===id);if(l){lotEdit(id);}else{$("#view").insertAdjacentHTML("afterbegin",`<div class="msg err">Tovar #${id} sa nenašiel (možno už bol vydaný).</div>`);}}
 window.addEventListener("hashchange",()=>{if(_routeLock){_routeLock=false;return;}route();});
 
 // ===== SKENOVANIE QR (kamera) =====
@@ -306,6 +315,7 @@ function renderRecv(){
         <label>QR na bedničke</label><div class="inline"><input id="r_qrb" placeholder="QR-BOX-…"><button class="btn ghost sm" onclick="openScan(t=>$('#r_qrb').value=t)">📷</button></div></div>
       <div class="row2"><div><label>Nákupná cena (za kus)</label><input id="r_buyprice" type="number" step="any"></div>
       <div><label>Mena</label><select id="r_buycur"><option>CZK</option><option>EUR</option><option>USD</option></select></div></div>
+      <label>Zdroj ceny</label><select id="r_buysource">${BUY_SOURCES.map(s=>`<option>${esc(s)}</option>`).join("")}</select>
       <label>Doklad / faktúra</label><input id="r_doc" placeholder="FA-… / dodací list">
       <label>Fotodokumentácia (voliteľné)</label>
       <div class="inline"><button class="btn ghost sm" onclick="rAddPhoto()">📷 Pridať fotku</button><span id="r_photocnt" class="muted"></span></div>
@@ -413,6 +423,7 @@ async function rSave(){
   const common={product_id:recvSel,warehouse_id:Number($("#r_wh").value),location_id:loc,track,
     status:"skladom",state:$("#r_state").value,note:($("#r_note").value.trim()||null),
     buy_price:$("#r_buyprice").value?Number($("#r_buyprice").value):null,buy_currency:$("#r_buycur").value||"CZK",
+    buy_by:ME.email||null,buy_source:($("#r_buysource")&&$("#r_buysource").value)||null,
     buy_date:new Date().toISOString().slice(0,10),invoice_number:$("#r_doc").value.trim()||null};
   $("#r_save").disabled=true;$("#r_msg").innerHTML="";
   const docNo=await ensureReceiveDoc();
@@ -516,10 +527,11 @@ async function loadIssueHistory(){
       <td style="white-space:nowrap"><button class="btn red sm" onclick="issueDelete(${m.id},'${esc(m.happened_at||"")}')">🗑 Zmazať</button></td></tr>`).join("")+`</tbody></table></div>`;
 }
 // ===== VÝDAJ SA PRIEBEŽNE PLNÍ DO JEDNEJ VÝDAJKY (s číslom) =====
-let currentIssueDoc=null;
-async function ensureIssueDoc(){if(!currentIssueDoc){currentIssueDoc=await nextDocNo("vydaj");const cd=$("#curdoc");if(cd)cd.textContent=currentIssueDoc||"—";}return currentIssueDoc;}
-function issueNewDoc(){currentIssueDoc=null;const cd=$("#curdoc");if(cd)cd.textContent="— (pridelí sa pri prvom výdaji)";renderIssueCurrent();}
+let currentIssueDoc=null,issueDocStartedAt=0;
+async function ensureIssueDoc(){if(!currentIssueDoc){currentIssueDoc=await nextDocNo("vydaj");issueDocStartedAt=Date.now();const cd=$("#curdoc");if(cd)cd.textContent=currentIssueDoc||"—";}return currentIssueDoc;}
+function issueNewDoc(){currentIssueDoc=null;issueDocStartedAt=0;const cd=$("#curdoc");if(cd)cd.textContent="— (pridelí sa pri prvom výdaji)";renderIssueCurrent();}
 async function issueCommit(lot,qty){
+  if(currentIssueDoc&&issueDocStartedAt&&!docAddAllowed(issueDocStartedAt)){alert("Do tejto vydajky uz nemozes pridavat — uplynul casovy limit pre tvoju rolu. Klikni 'Nova vydajka'.");return false;}
   await ensureIssueDoc();
   const via=($("#i_via")&&$("#i_via").value)||"fyzicky";
   const reason=($("#i_reason")&&$("#i_reason").value.trim())||null;
@@ -561,7 +573,11 @@ async function issueUndo(moveId){
 let currentReceiveDoc=null;
 async function ensureReceiveDoc(){if(!currentReceiveDoc)currentReceiveDoc=await nextDocNo("prijem");return currentReceiveDoc;}
 function receiveNewDoc(){currentReceiveDoc=null;renderRecv();}
-function receiveContinue(docNo){if(!docNo)return;currentReceiveDoc=docNo;recvSel=null;setTab("recv");}
+async function receiveContinue(docNo){if(!docNo)return;
+  const {data}=await sb.from("stock_movements").select("happened_at").eq("doc_no",docNo).order("happened_at",{ascending:true}).limit(1);
+  const oldest=data&&data[0]&&data[0].happened_at;
+  if(!docAddAllowed(oldest)){alert("Do tejto príjemky už nemôžeš pridávať — pre tvoju rolu uplynul časový limit. Požiadaj admina.");return;}
+  currentReceiveDoc=docNo;recvSel=null;setTab("recv");}
 // zmazať výdajku — users do 60 min, admin bez limitu; vráti tovar na sklad
 async function issueDelete(moveId,ts){
   if(ME.role!=="admin"){const age=(Date.now()-new Date(ts).getTime())/60000;if(age>60){alert("Výdajku môžeš zmazať len do 60 minút od výdaja. Požiadaj admina.");return;}}
@@ -621,7 +637,7 @@ function toggleStockSel(k,on){if(on)stockSel[k]=true;else delete stockSel[k];ren
 function stockSelAll(keys,on){keys.forEach(k=>{if(on)stockSel[k]=true;else delete stockSel[k];});renderStock();}
 async function loadStock(){
   $("#view").innerHTML=`<div class="card muted">Načítavam…</div>`;
-  const {data,error}=await sb.from("stock_lots").select("id,quantity,track,serial,qr_code,status,state,state_note,note,expected_date,counted_at,buy_price,buy_currency,buy_date,invoice_number,warehouse_id,location_id,shipment_id,product_id,products(name),warehouses(name,color),warehouse_locations(code)").order("id",{ascending:false}).limit(3000);
+  const {data,error}=await sb.from("stock_lots").select("id,quantity,track,serial,qr_code,status,state,state_note,note,expected_date,counted_at,buy_price,buy_currency,buy_date,buy_by,buy_source,invoice_number,warehouse_id,location_id,shipment_id,product_id,products(name),warehouses(name,color),warehouse_locations(code)").order("id",{ascending:false}).limit(3000);
   if(error){$("#view").innerHTML=`<div class="card"><div class="msg err">${esc(error.message)}</div></div>`;return;}
   stockLots=data||[];stockExpanded={};stockSel={};renderStock();
 }
@@ -676,7 +692,8 @@ function renderStock(){
       <td><span style="cursor:pointer;display:inline-flex;align-items:center;gap:8px" onclick="toggleExp('${k}')">${th}<span><b class="pnm" style="cursor:pointer" onclick="event.stopPropagation();prodOpen(${k})">${esc(nm)}</b><div class="psub">${catp} · ${ls.length} šarží</div></span></span></td>
       <td>${whCell}</td><td>${locCell}</td><td class="r">${qtyCell}</td><td></td><td>${buyCell}</td><td></td></tr>`;
     if(exp){ls.forEach(l=>{const loc=(l.warehouse_locations&&l.warehouse_locations.code)||"—";
-      const buy=(l.buy_price!=null?fmtNum(l.buy_price)+" "+(l.buy_currency||""):"—")+(l.buy_date?" · "+String(l.buy_date).slice(0,10):"")+(l.invoice_number?" · "+esc(l.invoice_number):"");
+      const buySrc=(l.buy_source||l.buy_by)?` <span class="tip muted" data-tip="Zdroj ceny: ${esc(l.buy_source||"—")}${l.buy_by?" · zadal: "+esc(l.buy_by):""}" style="cursor:help">ⓘ</span>`:"";
+      const buy=(l.buy_price!=null?fmtNum(l.buy_price)+" "+(l.buy_currency||""):"—")+(l.buy_date?" · "+String(l.buy_date).slice(0,10):"")+(l.invoice_number?" · "+esc(l.invoice_number):"")+buySrc;
       const posCell=l.status==="na_ceste"?`<span class="tag o">doručuje sa</span>${l.expected_date?` <span class="psub">→ ${esc(String(l.expected_date).slice(0,10))}</span>`:""}`:esc(loc);
       const rowbg=l.status==="na_ceste"?"background:#fff6e9":"background:#faf7f0";
       body+=`<tr style="${rowbg}">
@@ -813,7 +830,7 @@ function lotEdit(id){const l=stockLots.find(x=>x.id===id);if(!l)return;
   const whOpts=DATA.warehouses.map(w=>`<option value="${w.id}" ${w.id===l.warehouse_id?"selected":""}>${esc(w.name)}</option>`).join("");
   const stOpts=Object.keys(STATE_LBL).map(k=>`<option value="${k}" ${l.state===k?"selected":""}>${STATE_LBL[k]}</option>`).join("");
   const p=prodOf(l.product_id);
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Upraviť šaržu</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Upraviť tovar</h2><div class="inline" style="gap:6px">${copyLinkBtn("lot/"+id)}<button class="btn ghost sm" onclick="closeModal()">✕</button></div></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px"><span class="muted">${esc((l.products&&l.products.name)||p.name||"")}</span><button class="btn ghost sm" onclick="closeModal();prodDetail(${l.product_id})">ⓘ Parametre produktu</button></div>
     <div class="row2"><div><label>Sklad</label><select id="le_wh" onchange="leFillLoc()">${whOpts}</select></div>
     <div><label>Pozícia</label><select id="le_loc"></select></div></div>
@@ -824,6 +841,8 @@ function lotEdit(id){const l=stockLots.find(x=>x.id===id);if(!l)return;
     <label>QR kód</label><input id="le_qr" value="${esc(l.qr_code||"")}">
     <div class="row2"><div><label>Nákupná cena</label><input id="le_price" type="number" step="any" value="${esc(l.buy_price)}"></div>
     <div><label>Mena</label><select id="le_cur"><option ${l.buy_currency==="CZK"?"selected":""}>CZK</option><option ${l.buy_currency==="EUR"?"selected":""}>EUR</option><option ${l.buy_currency==="USD"?"selected":""}>USD</option></select></div></div>
+    <label>Zdroj ceny</label><select id="le_buysource"><option value="">—</option>${BUY_SOURCES.map(s=>`<option ${l.buy_source===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    ${l.buy_by?`<div class="muted" style="font-size:11.5px;margin-top:3px">Cenu zadal: <b>${esc(l.buy_by)}</b>${l.buy_source?" · zdroj: "+esc(l.buy_source):""}</div>`:""}
     <div class="row2"><div><label>Dátum nákupu</label><input id="le_date" type="date" value="${esc(l.buy_date?String(l.buy_date).slice(0,10):"")}"></div>
     <div><label>Faktúra</label><input id="le_inv" value="${esc(l.invoice_number||"")}"></div></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><label style="margin:0">Fotky tovaru <span class="muted" style="font-weight:400;font-size:11px">(uchovávajú sa pri tomto kuse)</span></label>${canWrite()?`<button class="btn ghost sm" type="button" onclick="leAddPhoto(${id})">📷 Pridať fotku</button>`:""}</div>
@@ -869,6 +888,7 @@ async function lotEditSave(id){
     state:$("#le_state").value,state_note:$("#le_note").value.trim()||null,
     quantity:Number($("#le_qty").value||1),serial:$("#le_sn").value.trim()||null,qr_code:$("#le_qr").value.trim()||null,
     buy_price:$("#le_price").value===""?null:Number($("#le_price").value),buy_currency:$("#le_cur").value,
+    buy_source:($("#le_buysource")&&$("#le_buysource").value)||null,buy_by:ME.email||null,
     buy_date:$("#le_date").value||null,invoice_number:$("#le_inv").value.trim()||null};
   const {error}=await sb.from("stock_lots").update(o).eq("id",id);
   if(error){alert(error.message);return;}closeModal();await loadStock();
@@ -998,19 +1018,23 @@ function prodDetail(id){const p=DATA.products.find(x=>x.id===id);if(!p)return;na
   const priceVal=p.price!=null&&p.price!==""?esc(p.price)+" "+esc(p.currency||"")+` <span title="${esc(priceInfo(p))}" style="cursor:help;color:#7a8aa5">&#9432;</span>`:"—";
   const lots=stockLots.filter(l=>l.product_id===id);
   const lotsHtml=lots.length?lots.map(l=>`<div class="lot"><div>${whChip(l)} · ${esc((l.warehouse_locations&&l.warehouse_locations.code)||"—")} · <b>${fmtNum(l.quantity)} ks</b> · ${STATE_LBL[l.state]||esc(l.state||"")}</div><div class="m">${l.serial?"SN: "+esc(l.serial)+" · ":""}${l.qr_code?esc(l.qr_code)+" · ":""}${l.buy_price!=null?"nákup "+fmtNum(l.buy_price)+" "+(l.buy_currency||""):""}${l.buy_date?" · "+String(l.buy_date).slice(0,10):""}</div></div>`).join(""):`<div class="muted">Žiadne šarže na sklade.</div>`;
-  const missingParams=!p.long_description&&productAttrList(id).length===0;
-  $("#view").innerHTML=`<div class="card"><div class="chosen"><b>${esc(p.name)}</b><div style="display:flex;gap:6px;flex-wrap:wrap">${canWrite()?`<button class="btn ghost sm" onclick="prodForm(${id})">✏️ Upraviť</button><button class="btn ghost sm" onclick="prodChangePrice(${id})">💰 Zmeniť cenu</button><button class="btn ghost sm" onclick="prodFetchSpecs(${id})">🔎 Dohľadať parametre</button><button class="btn ghost sm" onclick="prodPrintQR(${id})">🏷️ Tlač QR</button>`:""}<button class="btn ghost sm" onclick="setTab(tab==='prods'?'prods':'stock')">Späť</button></div></div>
-    ${missingParams?`<div class="msg" style="background:#fff4e5;color:#a8630c">Chýbajú parametre. ${p.sku?"Skús tlačidlo Dohľadať parametre.":"Doplň EAN/SKU a potom dohľadaj parametre, alebo vyplň ručne cez Upraviť."}</div>`:""}
-    <div style="margin:10px 0">${img}</div>
-    ${row("Značka",esc(brandName(p))||"—")}${row("Kategória",esc(catPathText(p.category_id))||"—")}
-    <div class="lot"><div class="m">Model / SKU</div><b>${esc(p.model||"—")}${p.sku?" · "+esc(p.sku)+copyBtn(p.sku):""}</b></div>
-    ${row("Orientačná cena",priceVal)}
-    ${p.weight_g?row("Hmotnosť",esc(p.weight_g)+" g"):""}
-    ${productAttrList(id).map(a=>row(a.label+(a.unit?" ("+a.unit+")":""),esc(a.value))).join("")}
-    ${p.description?row("Krátky popis",esc(p.description)):""}
-    ${p.long_description?`<div class="lot"><div class="m">Podrobný popis / parametre</div><div>${esc(p.long_description).replace(/\n/g,"<br>")}</div></div>`:""}
-    ${tags?`<div style="margin:8px 0">${tags}</div>`:""}
-    <h4 style="margin-top:12px">Na sklade (šarže)</h4>${lotsHtml}</div>`;
+  const params=productAttrList(id);
+  const missingParams=!p.long_description&&params.length===0;
+  $("#view").innerHTML=`<div class="card"><div class="chosen"><b>${esc(p.name)}</b><div style="display:flex;gap:6px;flex-wrap:wrap">${canWrite()?`<button class="btn ghost sm" onclick="prodForm(${id})">✏️ Upraviť</button><button class="btn ghost sm" onclick="prodChangePrice(${id})">💰 Zmeniť cenu</button><button class="btn ghost sm" onclick="prodFetchSpecs(${id})">🔎 Dohľadať parametre</button><button class="btn ghost sm" onclick="prodPrintQR(${id})">🏷️ Tlač QR</button>`:""}${copyLinkBtn("prods/"+id)}<button class="btn ghost sm" onclick="setTab(tab==='prods'?'prods':'stock')">Späť</button></div></div>
+    ${missingParams?`<div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">Chýbajú parametre. ${p.sku?"Skús tlačidlo Dohľadať parametre.":"Doplň EAN a potom dohľadaj parametre, alebo vyplň ručne cez Upraviť."}</div>`:""}
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;margin-top:10px">
+      <div>${p.image_url?`<img src="${esc(p.image_url)}" style="width:150px;height:150px;object-fit:contain;border-radius:10px;border:1px solid var(--line);background:var(--card)">`:`<div style="width:150px;height:150px;background:var(--bg-2);border-radius:10px;display:flex;align-items:center;justify-content:center" class="muted">bez fotky</div>`}</div>
+      <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:5px">
+        <div style="font-size:14px"><b>${esc(brandName(p))||"—"}</b> <span class="muted">· ${esc(catPathText(p.category_id))||"bez kategórie"}</span></div>
+        <div class="muted" style="font-size:12.5px">${p.model?esc(p.model):""}${p.sku?(p.model?" · ":"")+"EAN "+esc(p.sku)+copyBtn(p.sku):""}${p.weight_g?" · "+esc(p.weight_g)+" g":""}</div>
+        <div style="font-size:13px">Orientačná cena: <b>${priceVal}</b></div>
+        ${tags?`<div>${tags}</div>`:""}
+        ${params.length?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">${params.map(a=>`<div style="background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:4px 8px;font-size:12px"><span class="muted">${esc(a.label)}${a.unit?" ("+esc(a.unit)+")":""}:</span> <b>${esc(a.value)}</b></div>`).join("")}</div>`:""}
+        ${p.description?`<div class="muted" style="font-size:12.5px">${esc(p.description)}</div>`:""}
+      </div>
+    </div>
+    ${p.long_description?`<div class="lot" style="margin-top:8px"><div class="m">Podrobný popis / parametre</div><div>${esc(p.long_description).replace(/\n/g,"<br>")}</div></div>`:""}
+    <h4 style="margin-top:12px">Na sklade (tovar)</h4>${lotsHtml}</div>`;
 }
 // ===== DUPLICITY =====
 let DUP_MINMATCH=4;               // min. počet zhodných parametrov pre param-duplicitu
@@ -2258,7 +2282,7 @@ async function shipDetail(id){navHash("ship/"+id);shipMode="detail";shipDetailId
   const d=DIRS[s.direction]||["?",""];const canEdit=shipCanEdit(s);
   $("#view").innerHTML=`<div class="card">
     <div class="chosen"><div><span class="tag ${d[1]}">${d[0]}</span> <b>${esc(s.tracking_number)}</b>${copyBtn(s.tracking_number)}${s.locked?` <span title="Zamknuté" style="cursor:help">🔒</span>`:""}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${(canWrite()&&!shipClosed(s))?`<button class="btn sm" onclick="shipUpsTrack(${id})">🔄 Zistiť stav u prepravcu</button>`:""}<button class="btn ghost sm" onclick="shipPOD(${id})">🧾 ${abbr("POD","Proof of Delivery — potvrdenie o doručení")}</button>${canWrite()?`<button class="btn ghost sm" onclick="shipToggleLock(${id},${s.locked?"true":"false"})">${s.locked?"🔓 Odomknúť":"🔒 Zamknúť"}</button>`:""}<button class="btn ghost sm" onclick="shipMode='list';shipList()">← Späť na zoznam</button></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${(canWrite()&&!shipClosed(s))?`<button class="btn sm" onclick="shipUpsTrack(${id})">🔄 Zistiť stav u prepravcu</button>`:""}<button class="btn ghost sm" onclick="shipPOD(${id})">🧾 ${abbr("POD","Proof of Delivery — potvrdenie o doručení")}</button>${canWrite()?`<button class="btn ghost sm" onclick="shipToggleLock(${id},${s.locked?"true":"false"})">${s.locked?"🔓 Odomknúť":"🔒 Zamknúť"}</button>`:""}${copyLinkBtn("ship/"+id)}<button class="btn ghost sm" onclick="shipMode='list';shipList()">← Späť na zoznam</button></div></div>
     ${s.locked?`<div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">🔒 <b>Zamknuté</b>${s.locked_at?" · "+esc(String(s.locked_at).replace("T"," ").slice(0,16)):""}${s.locked_by?" · "+esc(s.locked_by):""} — poznámky a údaje nie je možné meniť${ME.role==="admin"?" (ako admin môžeš).":"."}</div>`:""}
     <div id="ship_upsmsg"></div>
     ${shipDetailHTML(s,its||[],lots||[])}
