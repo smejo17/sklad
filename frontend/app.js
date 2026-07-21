@@ -2840,8 +2840,8 @@ function assetForm(id){
     const catSel=a.category_id||(a.product_id?((DATA.products.find(p=>p.id===a.product_id)||{}).category_id):null);
     $("#view").innerHTML=`<div class="card"><h2>${id?"Upraviť":"Nový"} majetok</h2>
       ${a.source_lot||pre.source_lot?`<div class="msg ok">Vzniká presunom zo skladu — po uložení sa kus vyskladní.</div>`:""}
-      <label>Produkt z katalógu (nepovinné)</label><input id="as_prod" list="asProdList" value="${esc(prodName)}" placeholder="ak je z katalógu"><datalist id="asProdList">${prodOpts}</datalist>
-      <label>Názov (ak nie je z katalógu)</label><input id="as_name" value="${esc(a.name||"")}">
+      <label>Produkt (povinné — majetok je konkrétny kus produktu)</label><input id="as_prod" list="asProdList" value="${esc(prodName)}" placeholder="vyber z katalógu alebo napíš (nový sa vytvorí)"><datalist id="asProdList">${prodOpts}</datalist>
+      <label>Špecifické označenie (nepovinné)</label><input id="as_name" value="${esc(a.name||"")}" placeholder="napr. výrobné č., variant…">
       <label>Kategória (podľa typu produktu)</label><select id="as_cat">${catOptionsHtml(catSel)}</select>
       <div class="row2"><div><label>Sériové číslo</label><input id="as_serial" value="${esc(a.serial||"")}"></div>
       <div><label>Stav</label><select id="as_state">${stOpts}</select></div></div>
@@ -2867,7 +2867,7 @@ function asFillRooms(sel){const prem=($("#as_premise")||{}).value;const el=$("#a
 function assetAddPhoto(){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.setAttribute("capture","environment");
   inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;try{const blob=await compressImage(f,1200*1024,1600);const url=await uploadPhoto(blob,"assets");assetPhoto=url;$("#as_img").value=url;$("#as_imgwrap").innerHTML=`<img src="${esc(url)}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`;}catch(e){alert("Nahranie zlyhalo: "+(e.message||e));}};inp.click();}
 async function assetSave(id){
-  const prodVal=($("#as_prod").value||"").trim();const prod=prodVal?DATA.products.find(p=>(p.name||"").toLowerCase()===prodVal.toLowerCase()):null;
+  const prodVal=($("#as_prod").value||"").trim();let prod=prodVal?DATA.products.find(p=>(p.name||"").toLowerCase()===prodVal.toLowerCase()):null;
   const srcLot=$("#as_srclot").value?Number($("#as_srclot").value):null;
   const person_id=$("#as_person").value?Number($("#as_person").value):null;
   let premise_id=$("#as_premise").value?Number($("#as_premise").value):null;
@@ -2875,14 +2875,18 @@ async function assetSave(id){
   if(room_id&&!premise_id)premise_id=(DATA.rooms.find(r=>r.id===room_id)||{}).premise_id||null;
   let category_id=$("#as_cat").value?Number($("#as_cat").value):null;
   if(!category_id&&prod)category_id=prod.category_id||null;
-  const o={product_id:prod?prod.id:null,name:$("#as_name").value.trim()||null,serial:$("#as_serial").value.trim()||null,
+  // majetok MUSÍ byť naviazaný na produkt — ak zadaný nový, vytvor ho
+  if(!prod&&!prodVal){$("#as_msg").innerHTML=`<div class="msg err">Vyber alebo zadaj produkt — majetok musí byť naviazaný na produkt.</div>`;return;}
+  if(!person_id&&!premise_id){$("#as_msg").innerHTML=`<div class="msg err">Priraď majetok osobe alebo provozovni. (Nepriradený majetok patrí do skladu — vráť ho cez „Vrátiť na sklad".)</div>`;return;}
+  $("#as_save").disabled=true;
+  if(!prod&&prodVal){const {data:np,error:pe}=await sb.from("products").insert({name:prodVal,category_id:category_id||null,currency:"CZK"}).select("id,name,category_id").single();
+    if(pe){$("#as_save").disabled=false;$("#as_msg").innerHTML=`<div class="msg err">Produkt sa nepodarilo vytvoriť: ${esc(pe.message)}</div>`;return;}
+    prod=np;DATA.products.push(np);if(!category_id)category_id=np.category_id||null;}
+  const o={product_id:prod.id,name:$("#as_name").value.trim()||null,serial:$("#as_serial").value.trim()||null,
     category_id,state:$("#as_state").value,qr_code:$("#as_qr").value.trim()||null,person_id,room_id,premise_id,
     acquired_at:$("#as_acq").value||null,note:$("#as_note").value.trim()||null,
     image_url:$("#as_img").value||null,source_lot:srcLot||null,updated_at:new Date().toISOString(),
     holder:null,room:null,manager:null};
-  if(!o.name&&!o.product_id){$("#as_msg").innerHTML=`<div class="msg err">Zadaj názov alebo vyber produkt.</div>`;return;}
-  if(!person_id&&!premise_id){$("#as_msg").innerHTML=`<div class="msg err">Priraď majetok osobe alebo provozovni. (Nepriradený majetok patrí do skladu — ak ho tam chceš vrátiť, použi v detaile „Vrátiť na sklad".)</div>`;return;}
-  $("#as_save").disabled=true;
   let newId=id,err;
   if(id){const r=await sb.from("assets").update(o).eq("id",id);err=r.error;}
   else{const r=await sb.from("assets").insert(o).select("id").single();err=r.error;newId=r.data&&r.data.id;}
@@ -2973,17 +2977,34 @@ async function assetReassignDo(id){
 }
 async function assetDelete(id){if(!confirm("Zmazať túto položku majetku?"))return;const {error}=await sb.from("assets").delete().eq("id",id);if(error){alert(error.message);return;}setTab("assets");}
 // vrátenie majetku späť na SKLAD tovaru (len ak je naviazaný na produkt)
+// vrátenie majetku na sklad — vyber sklad + pozíciu (klasická príjemka)
 async function assetToStock(id){
   const {data:a}=await sb.from("assets").select("*").eq("id",id).single();if(!a)return;
-  if(!a.product_id){alert("Vrátiť na sklad tovaru možno len majetok naviazaný na produkt z katalógu. Inak ho nechaj v majetku ako nepridelený (Prideliť → Nepridelené).");return;}
-  if(!confirm("Vrátiť "+assetName(a)+" na sklad tovaru?"))return;
-  const wh=(DATA.warehouses[0]||{}).id||null;const dn=await nextDocNo("prijem");
-  const {data:lot,error}=await sb.from("stock_lots").insert({product_id:a.product_id,warehouse_id:wh,track:"unit",quantity:1,serial:a.serial||null,status:"skladom",state:a.state==="broken"?"used":(a.state||"used"),note:"vrátené z majetku"}).select("id").single();
+  if(!a.product_id){alert("Tento majetok nie je naviazany na produkt. Otvor 'Upravit' a vyber produkt, potom ho vies vratit na sklad.");return;}
+  const whOpts=DATA.warehouses.map(w=>`<option value="${w.id}">${esc(w.name)}</option>`).join("");
+  const stOpts=Object.keys(STATE_LBL).map(k=>`<option value="${k}" ${((a.state==="broken"?"damaged":a.state)||"used")===k?"selected":""}>${STATE_LBL[k]}</option>`).join("");
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Vrátiť na sklad</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="margin-bottom:6px">${esc(assetName(a))}${a.serial?" · SN "+esc(a.serial):""} → vytvorí sa <b>príjemka</b> a kus sa naskladní.</div>
+    <div class="row2"><div><label>Sklad</label><select id="ats_wh" onchange="atsFillLoc()">${whOpts}</select></div>
+      <div><label>Pozícia</label><select id="ats_loc"></select></div></div>
+    <div class="row2"><div><label>Stav</label><select id="ats_state">${stOpts}</select></div>
+      <div><label>Poznámka</label><input id="ats_note" value="vrátené z majetku"></div></div>
+    <div style="text-align:right;margin-top:12px"><button class="btn green" style="width:auto" onclick="assetToStockDo(${id})">✓ Naskladniť (príjemka)</button></div>`);
+  atsFillLoc();
+}
+function atsFillLoc(){const arr=locsOf($("#ats_wh").value);$("#ats_loc").innerHTML=`<option value="">—</option>`+arr.map(l=>`<option value="${l.id}">${esc(l.code)}${l.description?" — "+esc(l.description):""}</option>`).join("");}
+async function assetToStockDo(id){
+  const {data:a}=await sb.from("assets").select("*").eq("id",id).single();if(!a)return;
+  const wh=Number($("#ats_wh").value)||null;const loc=$("#ats_loc").value?Number($("#ats_loc").value):null;
+  const state=$("#ats_state").value;const note=$("#ats_note").value.trim()||"vrátené z majetku";
+  const dn=await nextDocNo("prijem");
+  const {data:lot,error}=await sb.from("stock_lots").insert({product_id:a.product_id,warehouse_id:wh,location_id:loc,track:"unit",quantity:1,serial:a.serial||null,qr_code:a.qr_code||null,status:"skladom",state,note}).select("id").single();
   if(error){alert(error.message);return;}
-  await sb.from("stock_movements").insert({type:"prijem",product_id:a.product_id,lot_id:lot&&lot.id,quantity:1,warehouse_id:wh,purpose:"vrátenie z majetku",note:"Majetok → sklad",doc_no:dn});
-  await assetLogMove(id,"tostock",{},"vrátené na sklad tovaru");
+  await sb.from("stock_movements").insert({type:"prijem",product_id:a.product_id,lot_id:lot&&lot.id,quantity:1,warehouse_id:wh,location_id:loc,purpose:"vrátenie z majetku",note,doc_no:dn,serial:a.serial||null});
+  await assetLogMove(id,"tostock",{},"vrátené na sklad · príjemka "+(dn||""));
   await sb.from("assets").delete().eq("id",id);
-  setTab("assets");
+  closeModal();setTab("assets");
+  $("#view").insertAdjacentHTML("afterbegin",`<div class="msg ok">✓ Vrátené na sklad, príjemka <b>${esc(dn||"—")}</b>.</div>`);
 }
 async function assetExport(){
   const {data}=await sb.from("assets").select("*").order("id");
