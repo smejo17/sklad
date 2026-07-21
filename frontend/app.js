@@ -548,9 +548,10 @@ function fmtNum(n){const x=+n;return isNaN(x)?String(n):x.toLocaleString("sk-SK"
 // skratka skladu (menej výrazné; plný názov v tooltipe)
 function whAbbr(name){if(!name)return "—";const n=String(name).replace(/^sklad\s+/i,"").trim();const first=n.split(/[\s,]/)[0]||n;return first.length>6?first.slice(0,5)+".":first;}
 function whChip(l){if(l.status==="na_ceste")return `<span class="tag o">doručuje sa</span>`;const nm=(l.warehouses&&l.warehouses.name)||whName(l.warehouse_id)||"—";const col=(l.warehouses&&l.warehouses.color)||whColor(l.warehouse_id);return `<span class="tag" title="${esc(nm)}" style="background:var(--bg-2);color:var(--grey);font-weight:600${col?`;border-left:3px solid ${esc(col)}`:""}">${esc(whAbbr(nm))}</span>`;}
-// vyhľadávanie v zásobách: nechá plynule písať (debounce) a po prekreslení vráti kurzor do poľa
-let _stockQT=null,_stockFocusQ=false;
-function stockQInput(v){sf.q=v;_stockFocusQ=true;clearTimeout(_stockQT);_stockQT=setTimeout(()=>{saveStockFilters();renderStock();},300);}
+// vyhľadávanie naprieč appkou: plynulé písanie (debounce) + po prekreslení vráti kurzor do poľa
+let _searchT=null,_focusSearchId=null;
+function searchInput(id,apply){_focusSearchId=id;clearTimeout(_searchT);_searchT=setTimeout(apply,300);}
+function restoreSearchFocus(){if(!_focusSearchId)return;const el=document.getElementById(_focusSearchId);_focusSearchId=null;if(el){el.focus();try{el.setSelectionRange(el.value.length,el.value.length);}catch(e){}}}
 // uložené filtre (localStorage, per user)
 function savedStockFilters(){try{return JSON.parse(localStorage.getItem("savedflt_"+ME.id)||"[]");}catch(e){return [];}}
 function sfSaveNew(){const name=prompt("Názov filtra:");if(!name||!name.trim())return;const arr=savedStockFilters();arr.push({name:name.trim(),sf:JSON.parse(JSON.stringify(sf))});localStorage.setItem("savedflt_"+ME.id,JSON.stringify(arr));renderStock();}
@@ -653,7 +654,7 @@ function renderStock(){
         ${canWrite()?`<button class="btn ghost sm" onclick="stockExport()">⬇ Export</button>`:""}</div>
     </div>
     <div style="border-top:1px solid var(--line-2);margin-bottom:8px"></div>
-    <div class="toolbar"><input id="stockQ" placeholder="Hľadať produkt / SN / QR / pozíciu…" value="${esc(sf.q)}" oninput="stockQInput(this.value)" style="flex:2 1 220px">
+    <div class="toolbar"><input id="stockQ" placeholder="Hľadať produkt / SN / QR / pozíciu…" value="${esc(sf.q)}" oninput="sf.q=this.value;searchInput('stockQ',()=>{saveStockFilters();renderStock()})" style="flex:2 1 220px">
       <select onchange="sf.wh=this.value;saveStockFilters();renderStock()" style="flex:0 1 130px">${whOpts}</select>
       <select onchange="sf.cat=this.value;sf.sub='';saveStockFilters();renderStock()">${catOpts}</select>
       <select onchange="sf.sub=this.value;saveStockFilters();renderStock()" ${subsS.length?"":"disabled"}>${subOptsS}</select>
@@ -667,7 +668,7 @@ function renderStock(){
       <button class="btn ghost sm" onclick="sfSaveNew()">💾 Uložiť</button>
       <button class="btn ghost sm" onclick="sfManage()">🗑</button></div>
     ${bulkBar}${table}</div>`;
-  if(_stockFocusQ){_stockFocusQ=false;const el=$("#stockQ");if(el){el.focus();try{el.setSelectionRange(el.value.length,el.value.length);}catch(e){}}}
+  restoreSearchFocus();
 }
 function stockOpenShipment(sid){setTab("ship");if(sid){setTimeout(()=>shipDetail(sid),80);}}
 function stateBadges(l){let b=`<span class="tag" style="background:#e4f6ea;color:#1d7d43">${STATE_LBL[l.state]||esc(l.state||"")}</span>`;
@@ -1060,19 +1061,24 @@ function renderProds(){
     </tr>`;}).join("");
   const table=list.length?`<div class="ptbl-wrap"><table class="ptbl"><thead><tr><th></th><th>Produkt</th><th>Značka</th><th>Kategória</th><th class="r">Orientačná nákupná cena</th><th></th></tr></thead><tbody>${trs}</tbody></table></div>`:`<div class="muted">Žiadne produkty.</div>`;
   $("#view").innerHTML=`
-    ${canWrite()?`<div class="card"><div class="inline" style="gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="prodForm(0)">+ Nový produkt</button><button class="btn ghost sm" onclick="prodExport()">⬇ Export (Excel/CSV)</button></div></div>`:""}
     <div class="card">
-    <div class="toolbar"><input placeholder="Hľadať názov / SKU / kategóriu / tag…" value="${esc(pf.q)}" oninput="pf.q=this.value;saveFilters();renderProds()">
-      <select onchange="pf.cat=this.value;pf.sub='';saveFilters();renderProds()">${catOpts}</select>
-      <select onchange="pf.sub=this.value;saveFilters();renderProds()" ${subs.length?"":"disabled"}>${subOpts}</select>
-      <select onchange="pf.brand=this.value;saveFilters();renderProds()">${brOpts}</select>
-      <button class="btn ghost sm" onclick="pf={q:'',cat:'',sub:'',brand:'',tag:''};saveFilters();renderProds()">✕ Filtre</button></div>
-    <div style="margin:2px 0 8px">${tagChips}</div>
-    <div class="inline" style="gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
-      <select style="width:auto" onchange="pfLoad(this.value)"><option value="">Uložené filtre…</option>${savedProdFilters().map(f=>`<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select>
-      <button class="btn ghost sm" onclick="pfSaveNew()">💾 Uložiť filter</button>
-      <button class="btn ghost sm" onclick="pfManage()">🗑</button></div>
-    <div class="muted" style="margin-bottom:8px">${list.length} produktov</div>${table}</div>`;
+      <div class="inline" style="gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div><b style="font-size:15px">Produkty</b> <span class="muted" style="font-size:12px">${list.length} produktov</span></div>
+        ${canWrite()?`<div class="inline" style="gap:6px;flex-wrap:wrap"><button class="btn green sm" onclick="prodForm(0)">+ Nový produkt</button><button class="btn ghost sm" onclick="prodExport()">⬇ Export</button></div>`:""}
+      </div>
+      <div style="border-top:1px solid var(--line-2);margin-bottom:8px"></div>
+      <div class="toolbar"><input id="prodQ" placeholder="Hľadať názov / SKU / kategóriu / tag…" value="${esc(pf.q)}" oninput="pf.q=this.value;searchInput('prodQ',()=>{saveFilters();renderProds()})" style="flex:2 1 220px">
+        <select onchange="pf.cat=this.value;pf.sub='';saveFilters();renderProds()">${catOpts}</select>
+        <select onchange="pf.sub=this.value;saveFilters();renderProds()" ${subs.length?"":"disabled"}>${subOpts}</select>
+        <select onchange="pf.brand=this.value;saveFilters();renderProds()" style="flex:0 1 140px">${brOpts}</select>
+        <button class="btn ghost sm" onclick="pf={q:'',cat:'',sub:'',brand:'',tag:''};saveFilters();renderProds()">✕ Filtre</button></div>
+      <div style="margin:2px 0 8px">${tagChips}</div>
+      <div class="inline" style="gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+        <select style="width:auto" onchange="pfLoad(this.value)"><option value="">Uložené filtre…</option>${savedProdFilters().map(f=>`<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("")}</select>
+        <button class="btn ghost sm" onclick="pfSaveNew()">💾 Uložiť</button>
+        <button class="btn ghost sm" onclick="pfManage()">🗑</button></div>
+      ${table}</div>`;
+  restoreSearchFocus();
 }
 function prodForm(id,prefill){
   const pf2=prefill||{};
@@ -1744,12 +1750,13 @@ async function shipList(){
   $("#view").innerHTML=`
   <div class="card" style="position:sticky;top:0;z-index:9;box-shadow:0 4px 14px rgba(42,38,33,.10)">
     <div class="inline" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <b style="font-size:15px">Zásielky</b>
       ${canWrite()?`<button class="btn green sm" onclick="shipForm()">+ Nová zásielka</button><button class="btn sm" onclick="shipQuickTrack()">⚡ Rýchle: tracking</button>`:""}
       <button class="btn ghost sm" onclick="shipCarrierInfo()">ℹ Dopravcovia</button>
       <button class="btn ghost sm" onclick="shipCarriers()">🚚 Synchronizácia</button>
       <button class="btn ghost sm" onclick="shipExport()">⬇ Export</button>
       <span style="flex:1"></span><span class="muted" style="font-size:12px">${list.length} zásielok</span></div>
-    <div class="toolbar"><input placeholder="🔎 Hľadať čokoľvek — tracking, meno/mesto príjemcu, objednávka, faktúra, JDS/AWB…" value="${esc(shipQ)}" oninput="shipQ=this.value;shipList()">
+    <div class="toolbar"><input id="shipQ" placeholder="🔎 Hľadať čokoľvek — tracking, meno/mesto príjemcu, objednávka, faktúra, JDS/AWB…" value="${esc(shipQ)}" oninput="shipQ=this.value;searchInput('shipQ',shipList)">
       <select onchange="shipSort=this.value;shipList()">${sort("new","Zoradiť: najnovšie")}${sort("old","Najstaršie")}${sort("eta","Najbližšie doručenie")}${sort("created","Podľa vytvorenia")}${sort("costhi","Doprava: najdrahšie")}${sort("costlo","Doprava: najlacnejšie")}</select></div>
     <div class="toolbar">
       <select onchange="shipFilterDir=this.value;shipList()">${dbtn("","Všetky smery")}${dbtn("inbound","Prichádzajúce (k nám)")}${dbtn("outbound","Odchádzajúce (od nás)")}${dbtn("dropship","Dropship")}</select>
@@ -1778,6 +1785,7 @@ async function shipList(){
     </details></div>
   ${table}`;
   if(shipExpandId&&list.some(s=>s.id===shipExpandId))setTimeout(()=>shipExpandFill(shipExpandId),0);
+  restoreSearchFocus();
 }
 function shipfResetAll(){shipFilterDir="";shipQ="";shipPay="";shipTrackOnly=false;shipUnrecv=false;shipCarrierF="";shipStatusF="";shipCountryF="";shipCostMin="";shipCostMax="";shipCreatedFrom="";shipCreatedTo="";shipDelivFrom="";shipDelivTo="";shipSort="new";shipList();}
 function shipToggleExpand(id){shipExpandId=(shipExpandId===id?null:id);shipList();}
