@@ -2487,8 +2487,12 @@ function repBreach(r){if(!r||r.status==="uzavrete")return null;const s=repSla();
   if(r.status==="cakanie_diely"&&r.parts_expected){const over=Math.floor((Date.now()-new Date(r.parts_expected).getTime())/86400000)-s.partsAfter;return over>0?{days:over,reason:"diely meškajú (nad termín + "+s.partsAfter+" dní)"}:null;}
   const lim=r.status==="diagnostika"?s.diagnostika:s.def;const d=repDays(r.updated_at||r.created_at);
   return d>lim?{days:d,reason:"čaká v stave nad "+lim+" dní"}:null;}
-function repStepBar(status){const cur=repStageNum(status);
-  return `<div style="display:flex;gap:2px;min-width:110px" data-tip="${esc(repStageLabel(status))}">${REP_STAGES.map(s=>{const isCur=s.n===cur;const on=s.n<cur;return `<span style="flex:1;height:6px;border-radius:3px;background:${isCur?"var(--blue)":(on?"var(--green)":"var(--line-2)")}"></span>`;}).join("")}</div>`;}
+// stavy, ktoré nastávajú len ak sa reálne opravuje (pri „neopravuje sa" sú neaplikovateľné)
+const REP_REPAIR_ONLY=new Set(["k_oprave","cakanie_diely","opravene"]);
+function repStepBar(r){const status=r.status;const cur=repStageNum(status);const na=!!r.not_repaired;
+  return `<div style="display:flex;gap:2px;min-width:110px" data-tip="${esc(repStageLabel(status))}${na?" · NEOPRAVUJE SA":""}">${REP_STAGES.map(s=>{
+    if(na&&REP_REPAIR_ONLY.has(s.k))return `<span data-tip="${esc(s.label)} — neaplikovateľné (neopravuje sa)" style="flex:1;height:6px;border-radius:3px;background:repeating-linear-gradient(45deg,var(--line-2),var(--line-2) 2px,transparent 2px,transparent 4px)"></span>`;
+    const isCur=s.n===cur;const on=s.n<cur;return `<span style="flex:1;height:6px;border-radius:3px;background:${isCur?"var(--blue)":(on?"var(--green)":"var(--line-2)")}"></span>`;}).join("")}</div>`;}
 function repSlaModal(){const s=repSla();
   openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Termíny / zvýraznenie</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
     <div class="muted" style="font-size:12.5px;margin-bottom:8px">Zvýrazniť opravu, ak čaká dlhšie ako:</div>
@@ -2518,7 +2522,7 @@ function renderRepairs(){
       return `<tr onclick="repairDetail(${r.id})" style="cursor:pointer;${hl}">
         <td style="max-width:190px"><b>${esc(nm(r))}</b>${r.repair_no?`<div class="psub mono">${esc(r.repair_no)}</div>`:""}${r.serial?`<div class="psub">SN: ${esc(r.serial)}</div>`:""}${r.kind==="reklamacia"?`<span class="tag r" style="font-size:10px">reklamácia</span>`:""}</td>
         <td>${esc(r.customer||"—")}${r.customer_contact?`<div class="psub">${esc(r.customer_contact)}</div>`:""}</td>
-        <td>${repStepBar(r.status)}<div class="psub"><span class="tag ${repStatusColor(r.status)}" style="font-size:10px">${repStageNum(r.status)} · ${esc(repStageLabel(r.status).replace(/^\d+ · /,""))}</span></div></td>
+        <td>${repStepBar(r)}<div class="psub"><span class="tag ${repStatusColor(r.status)}" style="font-size:10px">${repStageNum(r.status)} · ${esc(repStageLabel(r.status).replace(/^\d+ · /,""))}</span>${r.not_repaired?` <span class="tag r" style="font-size:10px">❌ neopravuje sa${r.disposition?" · "+esc(r.disposition):""}</span>`:""}</div></td>
         <td>${br?`<span class="tag o" data-tip="${esc(br.reason)}">⏱ ${br.days} dní</span>`:`<span class="muted">${repDays(r.updated_at||r.created_at)} dní</span>`}${overdue?`<div class="psub"><span class="tag r">po termíne ${esc(String(r.deadline).slice(0,10))}</span></div>`:(r.deadline?`<div class="psub">termín ${esc(String(r.deadline).slice(0,10))}</div>`:"")}</td>
         <td><b>${esc(r.technician||"—")}</b>${r.last_by?`<div class="psub">zmenil: ${esc(r.last_by)}</div>`:""}${r.received_by?`<div class="psub">prijal: ${esc(r.received_by)}</div>`:""}</td>
         <td>${esc(String(r.created_at||"").slice(0,10))}</td></tr>`;};
@@ -2665,12 +2669,17 @@ async function repairDetail(id){navHash("repairs/"+id);
   if(error){alert(error.message);return;}
   const {data:ph}=await sb.from("repair_photos").select("id,url").eq("repair_id",id).order("id");
   const {data:evs}=await sb.from("repair_events").select("*").eq("repair_id",id).order("created_at",{ascending:true});
+  const {data:ships}=await sb.from("shipments").select("id,tracking_number,carrier,direction,status").eq("repair_id",id).order("id",{ascending:false});
   const nm=r.title||((DATA.products.find(p=>p.id===r.product_id)||{}).name)||"(bez názvu)";
   const locked=repLocked(r);const canEd=canWrite()&&(!locked||ME.role==="admin");
+  const shipsHtml=(ships&&ships.length)?ships.map(s=>`<div class="lot" style="display:flex;justify-content:space-between;align-items:center"><div onclick="shipDetail(${s.id})" style="cursor:pointer"><b class="mono">${esc(s.tracking_number||"—")}</b> <span class="muted">${esc(s.carrier||"")} · ${dirBadge(s.direction)}${s.status?" · "+esc(s.status):""}</span></div></div>`).join(""):`<div class="muted" style="font-size:12px">Zatiaľ bez zásielok.</div>`;
   const f=(k,v,cls)=>(v!==null&&v!==undefined&&v!=="")?`<div class="fld${cls?" "+cls:""}"><div class="k">${k}</div><div class="v">${v}</div></div>`:"";
   const gal=(ph||[]).map(x=>`<a href="${esc(x.url)}" target="_blank"><img src="${esc(x.url)}" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--line);margin:3px"></a>`).join("")||`<div class="muted">Bez fotiek.</div>`;
   const doneIdx=repStageIdx(r.status);
-  const prog=REP_STAGES.map((s,i)=>`<span class="tag ${i<doneIdx?"g":(i===doneIdx?(repStatusColor(s.k)||"b"):"")}" style="${i>doneIdx?"opacity:.4":""};margin:1px;font-size:11px" data-tip="${esc(s.label)}">${i<=doneIdx?"✓":""}${s.n}</span>`).join("");
+  const na=!!r.not_repaired;
+  const prog=REP_STAGES.map((s,i)=>{
+    if(na&&REP_REPAIR_ONLY.has(s.k))return `<span class="tag" style="opacity:.5;text-decoration:line-through;margin:1px;font-size:11px" data-tip="${esc(s.label)} — neaplikovateľné (neopravuje sa)">${s.n}</span>`;
+    return `<span class="tag ${i<doneIdx?"g":(i===doneIdx?(repStatusColor(s.k)||"b"):"")}" style="${i>doneIdx?"opacity:.4":""};margin:1px;font-size:11px" data-tip="${esc(s.label)}">${i<=doneIdx?"✓":""}${s.n}</span>`;}).join("");
   const fLabel=(stage,key)=>{const st=REP_STAGES.find(x=>x.k===stage);const fl=st&&st.fields.find(x=>x.k===key);return fl?fl.label:key;};
   // DENNÍK — jeden riadok na krok (nemenný)
   const timeline=(evs||[]).slice().reverse().map(ev=>{const d=ev.data||{};
@@ -2683,7 +2692,8 @@ async function repairDetail(id){navHash("repairs/"+id);
   repEventStage=repNextStage(r.status);
   $("#view").innerHTML=SHIP2_CSS+`<div class="s2" style="max-width:none">
     <div class="card"><div class="chosen"><div><b>${esc(nm)}</b> <span class="mono" style="font-size:12px;color:var(--grey)">${esc(r.repair_no||"")}</span> ${r.kind==="reklamacia"?`<span class="tag r">reklamácia</span>`:`<span class="tag b">oprava</span>`} <span class="tag ${repStatusColor(r.status)}">${esc(repStageLabel(r.status))}</span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">${canEd?`<button class="btn ghost sm" onclick="repairForm(${id})">✏️ Upraviť základ</button>`:""}<button class="btn ghost sm" onclick="repairReceipt(${id})">🧾 Protokol</button>${copyLinkBtn("repairs/"+id)}<button class="btn ghost sm" onclick="setTab('repairs')">Späť</button></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${canEd?`<button class="btn ghost sm" onclick="repairForm(${id})">✏️ Upraviť základ</button>`:""}<button class="btn ghost sm" onclick="repairReceipt(${id})">🧾 Preberací protokol</button><button class="btn ghost sm" onclick="repairProtocol(${id})">🧾 Protokol o oprave</button>${copyLinkBtn("repairs/"+id)}<button class="btn ghost sm" onclick="setTab('repairs')">Späť</button></div></div>
+      ${na?`<div class="msg" style="background:var(--out-bg);color:var(--out-tx)">❌ <b>Neopravuje sa</b>${r.disposition?" · "+esc(r.disposition):""} — kroky ako potvrdenie ceny / diely / oprava sú neaplikovateľné.${canEd?` <button class="btn ghost sm" onclick="repairSetNotRepaired(${id},false)">✓ Predsa opraviť</button>`:""}</div>`:""}
       ${locked?`<div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">🔒 <b>Uzavreté (uzamknuté)</b> — údaje sa nedajú meniť${ME.role==="admin"?" (ako admin môžeš).":"."}</div>`:""}
       <div style="margin:6px 0 10px">${prog}</div>
       <div class="fgrid">
@@ -2695,7 +2705,12 @@ async function repairDetail(id){navHash("repairs/"+id);
         ${f("Vytvorené",esc(String(r.created_at||"").slice(0,10)))}
       </div>
       ${r.fault?`<div class="fld wide" style="margin-top:7px"><div class="k">Popis závady</div><div class="v" style="white-space:pre-wrap">${esc(r.fault)}</div></div>`:""}
+      ${canEd?`<div class="inline" style="gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center">
+        ${na?`<span class="muted" style="font-size:12px">Ukončenie (neopravuje sa):</span><select onchange="repairSetDisposition(${id},this.value)"><option value="">— disposition —</option>${["vrátené neopravené","likvidácia","na diely"].map(d=>`<option ${r.disposition===d?"selected":""}>${d}</option>`).join("")}</select>`
+        :`<button class="btn ghost sm" onclick="repairSetNotRepaired(${id},true)">❌ Neopravuje sa</button>`}</div>`:""}
     </div>
+    <div class="card"><h4 style="margin:0 0 8px">🚚 Zásielky (doprava k oprave)</h4>${shipsHtml}
+      ${canEd?`<div class="inline" style="gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost sm" onclick="repairLinkShipment(${id},'inbound')">➕ Od zákazníka (prišlo)</button><button class="btn ghost sm" onclick="repairLinkShipment(${id},'outbound')">➕ Späť zákazníkovi (odoslané)</button></div>`:""}</div>
     ${canEd?`<div class="card"><h4 style="margin:0 0 8px">➕ Zaznamenať krok <span class="muted" style="font-weight:400;font-size:12px">(nemenný — technik môže prepínať stavy dopredu aj dozadu)</span></h4>
       <div class="row2"><div><label>Stav / krok</label><select id="rev_stage" onchange="repEventStage=this.value;repairRenderStageFields()">${REP_STAGES.map(s=>`<option value="${s.k}" ${repEventStage===s.k?"selected":""}>${esc(s.label)}</option>`).join("")}</select></div>
         <div><label>Zaznamenal ${ME.role==="admin"?"<span class='muted' style='font-weight:400'>(admin — možno zmeniť)</span>":""}</label><input id="rev_author" value="${esc(ME.email)}" ${ME.role==="admin"?"":"readonly style=\"background:var(--bg-2)\""}></div></div>
@@ -2713,6 +2728,44 @@ async function repairDetail(id){navHash("repairs/"+id);
 }
 // admin: zmeniť meno autora v zázname denníka (jediná povolená úprava denníka)
 async function repEventRename(evId,repairId){if(ME.role!=="admin")return;const {data:ev}=await sb.from("repair_events").select("created_by_name").eq("id",evId).single();const nn=prompt("Zaznamenal (meno):",ev?ev.created_by_name||"":"");if(nn===null)return;const {error}=await sb.from("repair_events").update({created_by_name:nn.trim()||null}).eq("id",evId);if(error){alert(error.message);return;}repairDetail(repairId);}
+// neopravuje sa / disposition — kroky opravy sa stanú neaplikovateľné
+async function repairSetNotRepaired(id,val){
+  if(val){const reason=prompt("Dôvod (neopravuje sa) — napr. zákazník odmietol cenu / neplatí / neprebral:");if(reason===null)return;
+    const {data:cur}=await sb.from("repairs").select("status").eq("id",id).single();
+    await sb.from("repairs").update({not_repaired:true,updated_at:new Date().toISOString(),last_by:ME.email}).eq("id",id);
+    await sb.from("repair_events").insert({repair_id:id,stage:(cur&&cur.status)||"diagnostika",note:"NEOPRAVUJE SA: "+(reason||""),data:{},created_by_name:ME.email});
+  }else{await sb.from("repairs").update({not_repaired:false,disposition:null,updated_at:new Date().toISOString(),last_by:ME.email}).eq("id",id);
+    await sb.from("repair_events").insert({repair_id:id,stage:"diagnostika",note:"Zrusene 'neopravuje sa' — bude sa opravovat",data:{},created_by_name:ME.email});}
+  repairDetail(id);
+}
+async function repairProtocol(id){
+  const {data:r}=await sb.from("repairs").select("*").eq("id",id).single();if(!r)return;
+  const {data:evs}=await sb.from("repair_events").select("*").eq("repair_id",id).order("created_at",{ascending:true});
+  const nm=r.title||((DATA.products.find(p=>p.id===r.product_id)||{}).name)||"(bez názvu)";
+  const rowH=(l,v)=>v?`<tr><td style="padding:4px 14px 4px 0;color:#555;vertical-align:top"><b>${esc(l)}</b></td><td style="padding:4px 0">${esc(v)}</td></tr>`:"";
+  const jour=(evs||[]).map(ev=>`<tr><td style="padding:3px 10px 3px 0;white-space:nowrap;color:#555">${esc(String(ev.created_at||"").slice(0,10))}</td><td>${esc(repStageLabel(ev.stage))}${ev.note?" — "+esc(ev.note):""}${ev.created_by_name?" ("+esc(ev.created_by_name)+")":""}</td></tr>`).join("");
+  const html=`<!DOCTYPE html><html lang="sk"><head><meta charset="UTF-8"><title>Protokol o oprave ${esc(r.repair_no||"")}</title>
+   <style>body{font-family:Arial,Helvetica,sans-serif;color:#222;max-width:800px;margin:24px auto;padding:0 16px}h1{border-bottom:3px solid #b9641b;padding-bottom:6px}table{border-collapse:collapse;width:100%}h2{font-size:15px;margin-top:20px}</style></head><body>
+   <h1>Protokol o oprave</h1>
+   <p><b>Číslo:</b> ${esc(r.repair_no||"")} &nbsp; <b>Dátum:</b> ${new Date().toLocaleDateString("sk-SK")}</p>
+   <h2>Zákazník</h2><table>${rowH("Meno",r.customer)}${rowH("E-mail",r.customer_email)}${rowH("Telefón",r.customer_phone)}${rowH("Adresa",r.customer_address)}</table>
+   <h2>Zariadenie</h2><table>${rowH("Názov",nm)}${rowH("Sériové číslo",r.serial)}${rowH("Popis závady",r.fault)}</table>
+   <h2>Oprava</h2><table>${rowH("Odhad ceny",r.price_estimate!=null?r.price_estimate+" "+(r.price_currency||""):"")}${rowH("Finálna cena",r.price_final!=null?r.price_final+" "+(r.price_currency||""):"")}${rowH("Technik",r.technician)}${r.not_repaired?rowH("Neopravené",r.disposition||"áno"):""}</table>
+   <h2>Priebeh</h2><table>${jour}</table>
+   <p style="margin-top:36px">Podpis technika: __________________ &nbsp;&nbsp;&nbsp; Podpis zákazníka: __________________</p>
+   <script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const w=window.open("","_blank");if(w){w.document.write(html);w.document.close();}
+}
+async function repairSetDisposition(id,val){const {data:cur}=await sb.from("repairs").select("status").eq("id",id).single();await sb.from("repairs").update({disposition:val||null,updated_at:new Date().toISOString(),last_by:ME.email}).eq("id",id);if(val)await sb.from("repair_events").insert({repair_id:id,stage:(cur&&cur.status)||"uzavrete",note:"Ukončenie (neopravené): "+val,data:{},created_by_name:ME.email});repairDetail(id);}
+// prepojenie zásielky (doprava) na opravu — vytvorí zásielku s väzbou repair_id
+async function repairLinkShipment(id,dir){
+  const tn=prompt(dir==="inbound"?"Tracking číslo zásielky OD zákazníka (na opravu):":"Tracking číslo zásielky SPÄŤ zákazníkovi:");
+  if(tn===null)return;const t=(tn||"").trim();if(!t)return;
+  const carrier=detectCarrierName("",t)||"";
+  const {error}=await sb.from("shipments").insert({tracking_number:t,carrier,direction:dir,repair_id:id});
+  if(error){alert(error.message);return;}
+  repairDetail(id);
+}
 // polia pre zvolený krok
 function repairRenderStageFields(){const box=$("#rev_fields");if(!box)return;const st=REP_STAGES.find(x=>x.k===repEventStage);if(!st){box.innerHTML="";return;}
   box.innerHTML=st.fields.map(f=>{
