@@ -30,19 +30,21 @@ const PROMPT = `Na fotke je zásielka/balík. Fotka môže byť OTOČENÁ (text 
 
 Prepíš údaje PRESNE (znak po znaku) a vráť IBA čisté JSON v tomto tvare:
 {
-  "tracking_number": "",  // SLEDOVACIE číslo prepravcu (waybill). DHL Express = zvyčajne 10-miestne číslo (často pri slove "WAYBILL"). NIE je to smerovací kód (napr. "CZ-PRG-GTW"), NIE mesto pôvodu (napr. HKG), NIE počet kusov (napr. "3/5").
-  "carrier": "",          // UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta ... (podľa loga alebo tvaru čísla)
-  "serial": "",           // SÉRIOVÉ číslo PRODUKTU — označené "SN" alebo "Serial No" na výrobnej nálepke (dlhý alfanumerický kód, napr. AMF...). NIE je to číslo dokladu/objednávky.
+  "tracking_number": "",  // SLEDOVACIE číslo prepravcu. UPS = "1Z"+16 znakov (18 spolu). DHL Express = 10-miestne číslo (často pri "WAYBILL") alebo JJD/JVGL/JD… FedEx = 12 číslic. GLS = 11–14 číslic. Packeta/Zásilkovna = Z + 9–10 číslic. Česká pošta = 2 písmená+9 číslic+2 písmená (napr. RR…CZ). NIE je to smerovací kód (napr. "CZ-PRG-GTW"), NIE mesto (HKG), NIE počet kusov (3/5).
+  "carrier": "",          // UPS / FedEx / DHL Express / GLS / Packeta / Česká pošta / Balíkovna ... (podľa loga alebo tvaru čísla)
+  "awb": "",              // Air Waybill (letecký nákladný list) — 11 číslic vo formáte "XXX-XXXXXXXX" (3-cifrová letecká predpona + 7 + kontrolná). Býva pri "AWB", "MAWB", "HAWB". NIE je to bežné tracking číslo kuriéra.
+  "serial": "",           // SÉRIOVÉ číslo PRODUKTU — označené "SN"/"Serial No" na výrobnej nálepke (dlhý alfanumerický kód, napr. AMF...). NIE je to číslo dokladu/objednávky.
   "ean": "",              // EAN/UPC čiarový kód produktu (8/12/13 číslic), ak je
-  "invoice_number": "",   // číslo faktúry / dokladu (napr. "SLGJ...", čínske "单号", "Ref No: V-...")
+  "invoice_number": "",   // číslo FAKTÚRY / dokladu (napr. "SLGJ...", "Invoice No", čínske "单号", "Ref No: V-...")
+  "customs_doc": "",      // colný doklad — JDS / JSD / MRN (napr. "MRN 24CZ..."), colné vyhlásenie
   "order_number": "",     // číslo objednávky, ak je odlíšené od faktúry
-  "product": { "name": "", "brand": "", "model": "" },  // názov / značka / model produktu (napr. značka "Canaan" alebo "Avalon", model "Avalon Q 90T")
-  "specs": {},            // technické parametre z nálepky ako kľúč:hodnota — napr. {"Power consumption":"1800 W","Hash rate":"90 TH/s","Input":"110-240VAC 50/60Hz"}
+  "product": { "name": "", "brand": "", "model": "" },  // názov / značka / model produktu
+  "specs": {},            // technické parametre ako kľúč:hodnota — napr. {"Power consumption":"1800 W","Hash rate":"90 TH/s"}
   "references": [],       // ostatné kódy, ktoré nevieš zaradiť
   "notes": ""             // krátka poznámka (čo je na ktorej nálepke)
 }
 Pravidlá:
-- NEZAMIEŇAJ tri rôzne veci: sledovacie číslo prepravcu ≠ sériové číslo produktu (SN) ≠ číslo faktúry/objednávky.
+- NEZAMIEŇAJ: tracking prepravcu ≠ AWB (letecký, XXX-XXXXXXXX) ≠ sériové číslo (SN) ≠ faktúra ≠ colný doklad (JDS/MRN) ≠ objednávka.
 - Kódy prepíš presne ako sú; pri nejasnom znaku daj najlepší odhad, ale needituj dĺžku.
 - Ak niečo na fotke nie je, nechaj prázdny reťazec (alebo prázdny objekt). Nevymýšľaj.`;
 
@@ -75,9 +77,11 @@ Deno.serve(async (req) => {
       found: true,
       tracking_number: (p.tracking_number || "").toString().trim(),
       carrier: (p.carrier || "").toString().trim(),
+      awb: (p.awb || "").toString().trim(),
       serial: (p.serial || "").toString().trim(),
       ean: (p.ean || "").toString().trim(),
       invoice_number: (p.invoice_number || "").toString().trim(),
+      customs_doc: (p.customs_doc || "").toString().trim(),
       order_number: (p.order_number || "").toString().trim(),
       product: {
         name: (p.product?.name || "").toString().trim(),

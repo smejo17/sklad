@@ -1935,34 +1935,42 @@ const CARRIER_INFO=[
   {name:"UPS",bg:"#5a3410",fg:"#fff",access:"napojené (API)",accessCls:"g",
    api:["Aktuálny stav + celá história udalostí (čas, miesto, popis)","Dátum vytvorenia štítku","Adresy odosielateľ → príjemca","Meno príjemcu + podpis","Proof of Delivery (na tlač)","Váha + rozmery","Služba / produkt, počet kusov","Odhad doručenia (ETA)","Suma dobierky, referenčné čísla"],
    portal:["Reálna cena prepravy — faktúry / EDI 210 (UPS Billing Center)","Potvrdenie, že dobierka bola VYBRANÁ (Quantum View)","Detailné fakturačné položky, správa vratiek"],
+   label:["<b>Tracking:</b> 1Z + 16 znakov (spolu 18) — hlavný kód na skenovanie","<b>Reference No.</b> — číslo od odosielateľa (obj./PO)","MI kód pri UPS Mail Innovations"],
    setup:"developer.ups.com → App + produkt 'Tracking' (+ 'Quantum View'); secrets UPS_CLIENT_ID / UPS_CLIENT_SECRET"},
   {name:"FedEx",bg:"#4d148c",fg:"#fff",access:"napojené (API)",accessCls:"g",
    api:["Aktuálny stav + história udalostí","Dátum vytvorenia","Adresy odosielateľ → príjemca","Podpis (SPOD) ako obrázok — samostatné volanie","Proof of Delivery","Váha + rozmery","Služba, počet kusov","ETA (len US/CA/BE/DE/NL)","Referenčné čísla"],
    portal:["Reálna cena prepravy — faktúry / EDI (FedEx Billing Online)","Podpis SPOD aj bez čísla účtu odosielateľa","Detailné reporty a fakturácia"],
+   label:["<b>Tracking:</b> 12 číslic (Express/Ground)","<b>Door tag</b> DT + 12 číslic (neúspešné doručenie)","RMA / referencia od odosielateľa"],
    setup:"developer.fedex.com → Track API (sandbox a produkcia zvlášť); secrets FEDEX_CLIENT_ID / FEDEX_CLIENT_SECRET"},
   {name:"DHL",bg:"#d40511",fg:"#ffcc00",access:"napojené (API)",accessCls:"g",
    api:["Jedným kľúčom Express aj Freight (Unified Tracking)","Aktuálny stav + história","Dátum vytvorenia, ETA","Služba, počet kusov","Váha (čiastočne)","Proof of Delivery (čiastočne)","Adresy (čiastočne), referencie"],
    portal:["Reálna cena prepravy — export faktúr CSV/PDF/XML (MyBill)","Tvorba štítkov, detailné dáta (MyDHL+ / MyDHLi)","Fakturácia a reporty"],
+   label:["<b>Waybill / tracking:</b> 10 číslic (Express), príp. JJD/JVGL/JD…","<b>AWB</b> (letecký, freight): XXX-XXXXXXXX (11 číslic)","Smerový kód (napr. CZ-PRG-GTW) = NIE tracking; Piece ID"],
    setup:"developer.dhl.com → App 'Shipment Tracking – Unified'; secret DHL_API_KEY (App API Key, nie Secret)"},
   {name:"GLS",bg:"#061ab1",fg:"#ffd100",access:"napojené (API)",accessCls:"g",
    api:["Aktuálny stav + história udalostí","Proof of Delivery (PDF)","Váha, služba","Bez ETA, bez štruktúrovaného podpisu, bez sumy dobierky"],
    portal:["Faktúry / ceny prepravy (MyGLS)","Tvorba a správa štítkov","Detailné reporty, dobierky"],
+   label:["<b>Parcel No.:</b> 11–14 číslic (hlavný kód)","Track ID / ZBA…","Referencia odosielateľa"],
    setup:"zmluva + MyGLS účet; auth SHA-512 (Username + hash + ClientNumber); secrets GLS_USER / GLS_PASSWORD"},
   {name:"Zásilkovna",bg:"#bd2c30",fg:"#fff",access:"pripravené (API)",accessCls:"o",
    api:["Aktuálny stav + história","Názov nadväzujúceho dopravcu (carrierName)","Externý tracking kód","Fakturovaná hmotnosť","Bez sumy dobierky v trackingu; bez webhookov (poll ~3× denne)"],
    portal:["Vybrané dobierky + výplatné doklady (Klientská sekcia)","Ceny / faktúry","Tvorba zásielok a štítkov"],
+   label:["<b>Číslo zásielky:</b> Z + 9–10 číslic","Kód výdajného miesta","Externý tracking nadväzujúceho dopravcu"],
    setup:"biznis účet zasilkovna.cz → apiPassword (32 znakov hex); secret PACKETA_API_PASSWORD"},
   {name:"Česká pošta / Balíkovna",bg:"#e2001a",fg:"#ffdd00",access:"verejné API — bez kľúča",accessCls:"g",
    api:["Aktuálny stav + história (čas, český popis, pošta + PSČ)","Dátum podania = dátum vytvorenia","Krajina pôvodu / určenia","Podacia a cieľová pošta (odkiaľ/kam)","Hmotnosť, suma dobierky (čiastočne)","Počet kusov, 'uložené do', ETA (čiastočne)"],
    portal:["Vybrané dobierky, faktúry / ceny (zákaznícka zóna)","Podacie hárky","Vytváranie zásielok cez B2B 'ZSKService' (HMAC + zmluva)"],
+   label:["<b>Podacie číslo:</b> 2 písmená + 9 číslic + 2 písmená (napr. RR…CZ)","<b>Balíkovna:</b> DR…C","Čiarový kód dobierky (poukaz)"],
    setup:"nič — verejný endpoint. Balíkovna = tá istá sieť, pokrytá tým istým konektorom"},
   {name:"Neznámy / Ázia (agregátor)",bg:"#2a2621",fg:"#d9822b",access:"odporúčané",accessCls:"",
    api:["17TRACK / Ship24 — jeden kľúč pre ~1500 kuriérov","Auto-detekcia dopravcu (aj čínski: Cainiao, YunExpress, SF…)","Zjednotený stav + checkpointy + webhooky"],
    portal:["Cenu prepravy neposkytuje (rovnako ako ostatní)"],
+   label:["Formát čísla určí dopravcu automaticky","Čínske: faktúra '单号', HAWB pri leteckých"],
    setup:"registrácia na 17track.net / ship24.com → API kľúč; použiť pre zásielky, kde nepoznáme dopravcu"},
 ];
 function shipCarrierInfo(){
   const li=a=>a.map(x=>`<li>${esc(x)}</li>`).join("");
+  const liH=a=>(a||[]).map(x=>`<li>${x}</li>`).join(""); // label = dôveryhodný HTML (<b>)
   const blocks=CARRIER_INFO.map(c=>`
     <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--card)">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -1971,14 +1979,17 @@ function shipCarrierInfo(){
         <span class="tag ${c.accessCls}" style="margin-left:auto">${esc(c.access)}</span>
       </div>
       <div class="row2" style="gap:14px;flex-wrap:wrap">
-        <div style="min-width:220px"><div class="muted" style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-bottom:4px">📡 Cez API (tracking)</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${li(c.api)}</ul></div>
-        <div style="min-width:220px"><div class="muted" style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-bottom:4px">🔐 Z portálu po prihlásení</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${li(c.portal)}</ul></div>
+        <div style="min-width:200px"><div class="muted" style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-bottom:4px">📡 Cez API (tracking)</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${li(c.api)}</ul></div>
+        <div style="min-width:200px"><div class="muted" style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-bottom:4px">🔐 Z portálu po prihlásení</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${li(c.portal)}</ul></div>
+        <div style="min-width:200px"><div class="muted" style="font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.04em;margin-bottom:4px">🏷️ Kódy na štítku</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6">${liH(c.label)}</ul></div>
       </div>
       <div class="muted" style="font-size:11.5px;margin-top:8px;border-top:1px dashed var(--line);padding-top:6px">⚙️ Nastavenie: ${esc(c.setup)}</div>
     </div>`).join("");
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Čo vieme zistiť u dopravcov</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
-    <div class="muted" style="margin-bottom:10px">Pri každom prepravcovi: čo vráti <b>tracking API</b> (automaticky v appke) a čo navyše nájdeš <b>na jeho portáli po prihlásení</b> (ručne).</div>
-    <div class="msg" style="background:var(--warn-bg);color:var(--warn-tx)">⚠️ <b>Cenu prepravy</b> (čo si reálne zaplatil) nevracia žiadny tracking — len fakturačné portály vyššie alebo faktúra dodávateľa.</div>
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Dopravcovia — čo vieme zistiť + kódy na štítku</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="margin-bottom:10px">Pri každom prepravcovi: čo vráti <b>tracking API</b> (automaticky), čo nájdeš <b>na portáli po prihlásení</b> (ručne) a <b>čo znamenajú kódy na štítku</b>.</div>
+    <div class="msg" style="background:var(--acc-soft);color:#8a4e14">📷 <b>AI rozpoznávanie štítku:</b> pri príjme zásielky odfoť štítok a appka sama rozlíši <b>tracking</b> · <b>AWB</b> · <b>colné (JDS/MRN)</b> · <b>faktúru</b> · <b>sériové číslo</b> · EAN a predvyplní ich.</div>
+    <div class="msg" style="background:var(--warn-bg);color:var(--warn-tx);margin-top:6px">⚠️ <b>Cenu prepravy</b> (čo si reálne zaplatil) nevracia žiadny tracking — len fakturačné portály alebo faktúra dodávateľa.</div>
+    <div class="muted" style="font-size:12px;margin:8px 0"><b>Legenda:</b> <b>Tracking</b> = sledovacie číslo kuriéra · <b>AWB</b> = letecký nákladný list (XXX-XXXXXXXX) · <b>JDS/MRN</b> = colný doklad · <b>Faktúra</b> = obchodný doklad · <b>SN</b> = sériové číslo výrobku.</div>
     ${blocks}
     <div style="text-align:right;margin-top:6px"><button class="btn" style="width:auto" onclick="closeModal()">Zavrieť</button></div>`);
 }
@@ -2112,6 +2123,8 @@ async function shipLabelRecognize(){
       shipLastLabels=data;
       const set=(id,v)=>{const el=$("#"+id);if(el&&v&&!el.value)el.value=v;};
       set("s_trk",data.tracking_number);set("s_carr",data.carrier);set("s_inv",data.invoice_number);set("s_order",data.order_number);
+      set("s_awb",data.awb);set("s_jds",data.customs_doc);
+      if((data.awb||data.customs_doc)&&$("#s_customs")&&!$("#s_customs").checked)$("#s_customs").checked=true;
       // párovanie produktu: podľa EAN, inak podľa názvu/modelu; inak ponúkni vytvorenie z rozpoznaných údajov
       const norm=s=>String(s||"").replace(/\s/g,"").toLowerCase();
       const pm=(data.product&&(data.product.model||data.product.name))||"";
@@ -2124,7 +2137,7 @@ async function shipLabelRecognize(){
       else if(pm||data.ean){itemMsg=`Produkt ${pm?"„"+esc(pm)+"“":"(EAN "+esc(data.ean)+")"} nie je v katalógu — <button class="btn green sm" type="button" onclick="shipCreateProductFromLabel()">➕ Vytvoriť a pridať (aj s parametrami)</button>`;}
       else if(data.serial){shipPendingSerial=data.serial;itemMsg=`SN produktu: <b>${esc(data.serial)}</b> — vyber produkt nižšie, sériové číslo sa pridá automaticky.`;}
       const specN=data.specs?Object.keys(data.specs).length:0;
-      const extra=[data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",specN?("parametre: "+specN):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
+      const extra=[data.awb?"AWB: "+esc(data.awb):"",data.customs_doc?"colné (JDS/MRN): "+esc(data.customs_doc):"",data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",specN?("parametre: "+specN):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
       if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+extra:""}${itemMsg?"<br>"+itemMsg:""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
       shipLabelPhotos=[];renderLabelTray();
     }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
