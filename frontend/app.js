@@ -3384,20 +3384,38 @@ async function tagMerge(){const src=Number($("#t_src").value),dst=Number($("#t_d
 // ===== QR KÓDY — zásobník na tlač =====
 let qrLast=[]; // [{code,label}]
 const QR_FIRMS=[{name:"OneMiners",web:"https://oneminers.com"},{name:"Firma 2",web:"https://firma2.example"},{name:"Firma 3",web:"https://firma3.example"}];
+// hárky so samolepiacimi štítkami (A4) — cols/rows, rozmer štítku (lw×lh), okraje (mt/ml), rozstup (px/py) v mm
+const QR_TEMPLATES=[
+  {id:"sl24",  name:"SmartLine EL/MF 24L (70×36) — 24/hárok",    cols:3,rows:8, lw:70, lh:36,   mt:4.5, ml:0,   px:70, py:36},
+  {id:"sl12",  name:"SmartLine EL/MF 12L (105×48) — 12/hárok",   cols:2,rows:6, lw:105,lh:48,   mt:4.5, ml:0,   px:105,py:48},
+  {id:"sl8",   name:"SmartLine EL/MF 8L (105×74) — 8/hárok",     cols:2,rows:4, lw:105,lh:74,   mt:0.5, ml:0,   px:105,py:74},
+  {id:"sl4",   name:"SmartLine EL/MF 4L (105×148,5) — 4/hárok",  cols:2,rows:2, lw:105,lh:148.5,mt:0,   ml:0,   px:105,py:148.5},
+  {id:"sl1",   name:"SmartLine EL/MF 1L (210×297) — 1/hárok",    cols:1,rows:1, lw:210,lh:297,  mt:0,   ml:0,   px:210,py:297},
+  {id:"av7651",name:"Avery Zweckform L7651 (38,1×21,2) — 65/hárok",cols:5,rows:13,lw:38.1,lh:21.2,mt:15.15,ml:4.75,px:40.6,py:21.2},
+  {id:"av7160",name:"Avery Zweckform L7160 (63,5×38,1) — 21/hárok",cols:3,rows:7, lw:63.5,lh:38.1,mt:15.15,ml:7.2, px:66, py:38.1},
+  {id:"av3474",name:"Avery Zweckform 3474 (70×37,1) — 24/hárok", cols:3,rows:8, lw:70, lh:37.12,mt:4.5, ml:0,   px:70, py:37.12},
+  {id:"custom",name:"Vlastné rozmery…",                          cols:3,rows:8, lw:70, lh:36,   mt:4.5, ml:0,   px:70, py:36}
+];
+let qrTplId="sl24";
 function renderQR(){
   if(!canWrite()){$("#view").innerHTML=`<div class="card"><div class="msg err">QR kódy môže generovať user/admin.</div></div>`;return;}
   const prodOptsQ=DATA.products.map(p=>`<option value="${esc(p.name)}"></option>`).join("");
   $("#view").innerHTML=`
   <div class="card noprint"><h2>QR kódy — zásobník na tlač</h2>
     <div class="muted">Naskladaj kódy do zásobníka a vytlač ich naraz. Kódy sú dlhé unikátne reťazce — nikdy sa nezopakujú.</div>
-    <h4 style="margin-top:12px">Nastavenie tlače</h4>
-    <div class="row2"><div><label>Veľkosť QR</label><select id="q_size" onchange="qrRenderSheet()"><option value="2">2×2 cm</option><option value="3" selected>3×3 cm</option><option value="4">4×4 cm</option></select></div>
-    <div><label>Rovnakých na kód</label><select id="q_dupes" onchange="qrRenderSheet()"><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div></div>
+    <h4 style="margin-top:12px">Hárok so štítkami (samolepiaci)</h4>
+    <select id="q_tpl" onchange="qrTplChange()">${QR_TEMPLATES.map(t=>`<option value="${t.id}" ${qrTplId===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
+    <div class="muted" style="margin:2px 0 6px;font-size:12px">Rozmery sa dajú doladiť, ak tlač nesedí presne (posun okrajov). Hodnoty sú v mm.</div>
+    <div class="row2"><div><label>Stĺpce × riadky</label><div class="inline" style="gap:6px"><input id="q_cols" type="number" step="1" style="max-width:70px" oninput="qrRenderSheet()"><span>×</span><input id="q_rows" type="number" step="1" style="max-width:70px" oninput="qrRenderSheet()"></div></div>
+    <div><label>Štítok š × v (mm)</label><div class="inline" style="gap:6px"><input id="q_lw" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"><span>×</span><input id="q_lh" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"></div></div></div>
+    <div class="row2" style="margin-top:6px"><div><label>Okraj hore × vľavo (mm)</label><div class="inline" style="gap:6px"><input id="q_mt" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"><span>×</span><input id="q_ml" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"></div></div>
+    <div><label>Rozstup X × Y (mm)</label><div class="inline" style="gap:6px"><input id="q_px" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"><span>×</span><input id="q_py" type="number" step="0.1" style="max-width:80px" oninput="qrRenderSheet()"></div></div></div>
+    <div class="row2" style="margin-top:8px"><div><label>Veľkosť QR na štítku</label><select id="q_qr" onchange="qrRenderSheet()"><option value="auto" selected>Automaticky (max)</option><option value="90">90 %</option><option value="80">80 %</option><option value="70">70 %</option><option value="60">60 %</option></select></div>
+    <div><label>Rovnakých na kód</label><select id="q_dupes" onchange="qrRenderSheet()"><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option><option value="8">8</option></select></div></div>
+    <label class="chk" style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="q_txt" checked onchange="qrRenderSheet()"> Popis pod QR (názov · kód · firma)</label>
     <div class="row2" style="margin-top:8px"><div><label>Firma (značka na štítku)</label><select id="q_firm" onchange="qrFirmUI()"><option value="-1">— bez firmy —</option>${QR_FIRMS.map((c,i)=>`<option value="${i}">${esc(c.name)}</option>`).join("")}</select></div>
     <div><label>Kódovať QR ako</label><select id="q_web" onchange="qrRenderSheet()"><option value="0">interný kód (na skenovanie)</option><option value="1">web odkaz (externý vidí web firmy)</option></select></div></div>
-    <label>Web firmy (do QR pre externých)</label><input id="q_firmurl" placeholder="napr. https://www.kentino.com" oninput="qrRenderSheet()">
-    <div class="muted" style="margin-top:2px">Web-QR = web/i/KÓD → externý po naskenovaní vidí vašu stránku, interný skener rozpozná kód.</div>
-    <label class="chk" style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="q_cut" checked onchange="qrRenderSheet()"> Rezacie krížiky medzi kódmi</label>
+    <label>Web firmy (do QR pre externých)</label><input id="q_firmurl" placeholder="napr. https://www.oneminers.com" oninput="qrRenderSheet()">
   </div>
   <div class="card noprint"><h4>Pridať do zásobníka</h4>
     <div class="row2"><div><label>Počet (bez produktu)</label><input id="q_count" type="number" min="1" max="300" value="12"></div>
@@ -3415,7 +3433,7 @@ function renderQR(){
     <div class="row2" style="margin-top:8px"><button class="btn ghost" onclick="qrPrintFree()">Načítať voľné kódy</button><button class="btn red" onclick="qrDeleteFree()">🗑 Premazať nepoužité</button></div></div>
   <div class="noprint" id="q_actions"></div>
   <div id="q_sheet"></div>`;
-  qrRenderQueue();qrFreeCount();
+  qrTplChange();qrRenderQueue();qrFreeCount();
 }
 async function qrFreeCount(){const {count}=await sb.from("qr_codes").select("id",{count:"exact",head:true}).eq("status","free");const el=$("#q_freecnt");if(el)el.textContent="Voľných (nepriradených) kódov v systéme: "+(count??0);}
 function randCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";const arr=new Uint32Array(10);crypto.getRandomValues(arr);let s="";for(let i=0;i<10;i++)s+=a[arr[i]%a.length];return s;}
@@ -3457,18 +3475,43 @@ async function qrDeleteFree(){
   if(error){alert(error.message);return;}
   qrLast=[];qrRenderQueue();qrFreeCount();
 }
+function qrTplChange(){const id=$("#q_tpl").value;qrTplId=id;const t=QR_TEMPLATES.find(x=>x.id===id)||QR_TEMPLATES[0];
+  const set=(k,v)=>{const el=$("#q_"+k);if(el)el.value=v;};
+  set("cols",t.cols);set("rows",t.rows);set("lw",t.lw);set("lh",t.lh);set("mt",t.mt);set("ml",t.ml);set("px",t.px);set("py",t.py);
+  qrRenderSheet();}
+function qrGeom(){const n=id=>{const el=$("#"+id);return el?Number(el.value):0;};
+  return {cols:Math.max(1,n("q_cols")||1),rows:Math.max(1,n("q_rows")||1),lw:n("q_lw")||70,lh:n("q_lh")||36,mt:n("q_mt")||0,ml:n("q_ml")||0,px:n("q_px")||n("q_lw")||70,py:n("q_py")||n("q_lh")||36};}
+function qrLabelInner(x,g,showTxt){
+  const pad=1;const iw=Math.max(4,g.lw-2*pad),ih=Math.max(4,g.lh-2*pad);
+  const pctSel=$("#q_qr")&&$("#q_qr").value!=="auto"?Number($("#q_qr").value)/100:1;
+  const wide=iw>=ih*1.5&&showTxt;
+  let qrmm=wide?ih:Math.min(iw,showTxt?ih*0.72:ih);
+  qrmm=Math.min(qrmm*pctSel,iw,ih);
+  const px=Math.max(120,Math.round(qrmm*10));
+  const img=`<img src="${qrImg(x.data,px)}" style="width:${qrmm}mm;height:${qrmm}mm">`;
+  const fs=g.lh<=25?"5pt":(g.lh<=40?"6pt":"7pt");
+  const txt=showTxt?`<div class="qc" style="font-size:${fs};text-align:${wide?"left":"center"}">${x.label?"<b>"+esc(x.label)+"</b><br>":""}${esc(x.code)}${x.firm?"<br><span style='color:#888'>"+esc(x.firm)+"</span>":""}</div>`:"";
+  if(wide)return `<div style="display:flex;align-items:center;gap:1mm;height:100%;padding:${pad}mm">${img}<div style="flex:1;min-width:0">${txt}</div></div>`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.4mm;height:100%;padding:${pad}mm">${img}${txt}</div>`;}
 function qrRenderSheet(){
   if(!qrLast.length){$("#q_sheet").innerHTML="";$("#q_actions").innerHTML="";return;}
-  const cm=Number($("#q_size").value)||3;const w=cm*10;
+  const g=qrGeom();
   const dupes=Math.max(1,Number($("#q_dupes").value)||1);
-  const cut=$("#q_cut")&&$("#q_cut").checked;
+  const showTxt=$("#q_txt")?$("#q_txt").checked:true;
   const firm=$("#q_firm")?QR_FIRMS[Number($("#q_firm").value)]:null;
   const firmUrl=(($("#q_firmurl")&&$("#q_firmurl").value)||(firm&&firm.web)||"").trim().replace(/\/+$/,"");
   const asWeb=$("#q_web")&&$("#q_web").value==="1"&&firmUrl;
   const cells=[];
-  qrLast.forEach(x=>{const data=asWeb?(firmUrl+"/i/"+x.code):x.code;for(let d=0;d<dupes;d++)cells.push(`<div class="qcell${cut?" cutx":""}" style="width:${w}mm"><img src="${qrImg(data,300)}" style="width:${w}mm;height:${w}mm"><div class="qc">${x.label?"<b>"+esc(x.label)+"</b><br>":""}${esc(x.code)}${firm?"<br><span style='color:#888'>"+esc(firm.name)+"</span>":""}</div></div>`);});
-  $("#q_actions").innerHTML=`<button class="btn green" onclick="window.print()">🖨 Tlačiť (${cells.length} ks)</button>`;
-  $("#q_sheet").innerHTML=`<div class="qsheet">${cells.join("")}</div>`;
+  qrLast.forEach(x=>{const data=asWeb?(firmUrl+"/i/"+x.code):x.code;for(let d=0;d<dupes;d++)cells.push({data,code:x.code,label:x.label,firm:firm?firm.name:""});});
+  const per=g.cols*g.rows;const pages=Math.ceil(cells.length/per);
+  let html="";
+  for(let p=0;p<pages;p++){html+=`<div class="qpage">`;
+    for(let i=0;i<per;i++){const idx=p*per+i;if(idx>=cells.length)break;
+      const col=i%g.cols,rw=Math.floor(i/g.cols);const left=g.ml+col*g.px,top=g.mt+rw*g.py;
+      html+=`<div class="qlabel" style="left:${left}mm;top:${top}mm;width:${g.lw}mm;height:${g.lh}mm">${qrLabelInner(cells[idx],g,showTxt)}</div>`;}
+    html+=`</div>`;}
+  $("#q_sheet").innerHTML=html;
+  $("#q_actions").innerHTML=`<button class="btn green" onclick="window.print()">🖨 Tlačiť (${cells.length} ks · ${pages} ${pages===1?"hárok":"hárkov"})</button>`;
 }
 // ===== katalóg: skenuj a pridaj produkt =====
 function catalogScan(){openScan(async code=>{

@@ -73,16 +73,18 @@
   /* modal */
   #modalOverlay{position:fixed;inset:0;background:rgba(33,29,24,.5);z-index:95;display:flex;align-items:flex-start;justify-content:center;padding:28px 14px;overflow:auto}
   #modalCard{background:var(--card);border-radius:12px;max-width:780px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(33,29,24,.32)}
-  /* QR tlač */
-  .qsheet{display:flex;flex-wrap:wrap;gap:0}
-  .qcell{position:relative;display:flex;flex-direction:column;align-items:center;padding:3mm;page-break-inside:avoid}
-  .qcell img{display:block}
-  .qcell .qc{font-size:8pt;margin-top:1mm;word-break:break-all;max-width:36mm;text-align:center;line-height:1.15}
-  /* rezacie krížiky medzi kódmi (v rohoch buniek) */
-  .qcell.cutx::before,.qcell.cutx::after{content:"";position:absolute;width:10px;height:10px;background:linear-gradient(#8a94a6,#8a94a6) center/1px 10px no-repeat,linear-gradient(#8a94a6,#8a94a6) center/10px 1px no-repeat}
-  .qcell.cutx::before{top:-5px;left:-5px}
-  .qcell.cutx::after{top:-5px;right:-5px}
-  @media print{.top,.tabs,.noprint,#sidebar,.pagehead{display:none!important}.wrap{max-width:100%;padding:0}.card{border:0;padding:0;box-shadow:none}#main{margin:0}}
+  /* QR tlač — presné hárky so samolepiacimi štítkami (A4) */
+  .qpage{position:relative;width:210mm;height:297mm;margin:0 auto 10mm;background:#fff;box-shadow:0 0 0 1px var(--line);overflow:hidden}
+  .qlabel{position:absolute;overflow:hidden;box-sizing:border-box}
+  .qlabel img{display:block}
+  .qlabel .qc{word-break:break-all;line-height:1.1}
+  @media print{
+    @page{size:A4;margin:0}
+    .top,.tabs,.noprint,#sidebar,.pagehead{display:none!important}
+    .wrap{max-width:100%;padding:0;margin:0}.card{border:0;padding:0;box-shadow:none}#main{margin:0}
+    .qpage{margin:0;box-shadow:none;page-break-after:always}
+    .qpage:last-child{page-break-after:auto}
+  }
   /* ===== Layout: PC = bočné menu, mobil = horné taby ===== */
   #appView{display:flex;min-height:100vh}
   #appView.mob{display:block}
