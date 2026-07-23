@@ -1887,6 +1887,7 @@ async function shipList(){
       <b style="font-size:15px">Zásielky</b>
       ${canWrite()?`<button class="btn green sm" onclick="shipForm()">+ Nová zásielka</button><button class="btn sm" onclick="shipQuickTrack()">⚡ Rýchle: tracking</button>`:""}
       <button class="btn ghost sm" onclick="shipCarrierInfo()">ℹ Dopravcovia</button>
+      <button class="btn ghost sm" onclick="shipLabelGuide()">🏷️ Anatómia štítku</button>
       <button class="btn ghost sm" onclick="shipCarriers()">🚚 Synchronizácia</button>
       <button class="btn ghost sm" onclick="shipExport()">⬇ Export</button>
       <span style="flex:1"></span><span class="muted" style="font-size:12px">${list.length} zásielok</span></div>
@@ -1992,6 +1993,70 @@ function shipCarrierInfo(){
     <div class="muted" style="font-size:12px;margin:8px 0"><b>Legenda:</b> <b>Tracking</b> = sledovacie číslo kuriéra · <b>AWB</b> = letecký nákladný list (XXX-XXXXXXXX) · <b>JDS/MRN</b> = colný doklad · <b>Faktúra</b> = obchodný doklad · <b>SN</b> = sériové číslo výrobku.</div>
     ${blocks}
     <div style="text-align:right;margin-top:6px"><button class="btn" style="width:auto" onclick="closeModal()">Zavrieť</button></div>`);
+}
+// vysvetlivka: anatómia prepravného štítku — čo je ktorý text (reálne príklady DHL + UPS)
+const LABEL_TAGS={
+  scan:{t:"tracking — TOTO skenuj",c:"#2f8858",bg:"#e6f2ea"},
+  awb:{t:"AWB (letecký)",c:"#3a6ea5",bg:"#e4edf6"},
+  ref:{t:"referencia / faktúra",c:"#8a8178",bg:"#efe9dd"},
+  route:{t:"smerovanie — nie tracking",c:"#c14740",bg:"#f7e6e4"},
+  info:{t:"info",c:"#8a8178",bg:"#efe9dd"}};
+function labelTag(k){const x=LABEL_TAGS[k];return x?`<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;background:${x.bg};color:${x.c};margin-left:4px;white-space:nowrap">${esc(x.t)}</span>`:"";}
+// každý riadok: [text na štítku, čo to je, tag]
+const LABEL_EXAMPLES=[
+  {name:"DHL Express",bg:"#d40511",fg:"#ffcc00",note:"Reálny štítok z HK → Praha (Computer Fan).",
+   rows:[
+    ["DHL (žlto-červené logo)","Prepravca","info"],
+    ["EXPRESS WORLDWIDE · WPX","Produkt/služba (WPX = Worldwide Parcel Express)","info"],
+    ["Origin: HKG","Pôvod — letiskový kód (Hongkong)","route"],
+    ["From: DONGGUAN YIHW… HONG KONG","Odosielateľ","info"],
+    ["To: KENTINO S.R.O. TAX NO. CZ05066743…","Príjemca + DIČ","info"],
+    ["CZ-PRG-GTW  3X68","Smerový/triediaci kód (Česko-Praha-gateway)","route"],
+    ["Pce/Shpt Weight: 10.5/54.3 kg","Hmotnosť kusu / celej zásielky","info"],
+    ["Piece: 2/6","Poradie kusu (2. zo 6)","route"],
+    ["Ref No: DL-6638699686","Referencia odosielateľa","ref"],
+    ["Content: Computer Fan","Obsah","info"],
+    ["WAYBILL  83 1798 8302","Tracking (waybill) — 10 číslic: 8317988302","scan"],
+    ["(2L)CZ10100+48000001","Routing barcode (PSČ CZ 10100)","route"],
+    ["(J) JD01 4600 0127…","Piece-ID / „license plate\" barcode kusu","route"]]},
+  {name:"UPS",bg:"#5a3410",fg:"#fff",note:"Reálny štítok z Talianska → Praha (UPS Standard).",
+   rows:[
+    ["UPS (logo)","Prepravca","info"],
+    ["MaxiCode (okrúhly 2D kód s terčíkom)","Smerovanie a triedenie v sieti UPS (PSČ, krajina, služba) — NIE tracking","route"],
+    ["SHIP TO: MIZIK VASEK… 10100 PRAHA","Príjemca","info"],
+    ["CZE 582 2-11","Routing code — cieľové PSČ/triediace stredisko","route"],
+    ["UPS STANDARD","Druh služby","info"],
+    ["TRACKING #: 1Z V8K 534 68 3770 5525","Tracking — 1Z + 16 znakov (18 spolu)","scan"],
+    ["SHP#: V8K5 34FC LSC","Interné číslo zásielky odosielateľa","ref"],
+    ["SHP WT / DWT / DATE","Hmotnosť a dátum podania","info"],
+    ["1 OF 2","Poradie kusu (1. z 2)","route"]]}];
+function shipLabelGuide(){
+  const legend=Object.values(LABEL_TAGS).filter((x,i)=>i<4).map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:${x.bg};color:${x.c}"><span style="width:9px;height:9px;border-radius:50%;background:${x.c}"></span>${esc(x.t)}</span>`).join("");
+  const ex=LABEL_EXAMPLES.map(e=>`
+    <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--card)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="width:46px;height:30px;border-radius:6px;background:${e.bg};color:${e.fg};font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 46px">${esc(e.name.split(" ")[0])}</span>
+        <b style="font-size:15px">${esc(e.name)}</b><span class="muted" style="font-size:12px">${esc(e.note)}</span></div>
+      <table class="ptbl" style="font-size:13px"><thead><tr><th style="width:44%">Text na štítku</th><th>Čo to je</th></tr></thead><tbody>
+      ${e.rows.map(r=>`<tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(r[0])}</td><td>${esc(r[1])}${labelTag(r[2])}</td></tr>`).join("")}
+      </tbody></table></div>`).join("");
+  const fmt=[["UPS","1Z + 16 znakov (18 spolu)","Reference No. · MaxiCode (smerovanie)"],
+    ["FedEx","12 číslic (až 14/15)","Door tag DT+12 · Form ID"],
+    ["DHL Express","10 číslic pri „WAYBILL\" / JJD, JVGL, JD…","AWB XXX-XXXXXXXX · smerový kód (napr. CZ-PRG-GTW)"],
+    ["GLS","11–14 číslic","Track ID / ZBA…"],
+    ["Zásilkovna / Packeta","Z + 9–10 číslic","kód výdajného miesta"],
+    ["Česká pošta","RR…CZ (2 písm.+9 číslic+2 písm.)","barcode dobierky"],
+    ["Balíkovna","DR…C","—"],
+    ["Letecký AWB","XXX-XXXXXXXX (11 číslic)","3-cifra letecká predpona + 7 + kontrola · pre colné"]]
+    .map(r=>`<tr><td><b>${esc(r[0])}</b></td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(r[1])}</td><td class="muted" style="font-size:12px">${esc(r[2])}</td></tr>`).join("");
+  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Anatómia prepravného štítku — čo je čo</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+    <div class="muted" style="margin-bottom:8px">Rozpis polí na reálnych štítkoch. Ktorý kód je <b>tracking</b>, ktorý <b>AWB</b>, čo je len <b>referencia</b> a čo <b>smerovanie</b> (neskenovať ako tracking).</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${legend}</div>
+    <div class="msg" style="background:var(--acc-soft);color:#8a4e14;margin-bottom:12px">📷 <b>V appke:</b> pri novej zásielke odfoť štítok (📷 Odfotiť štítok) — appka rozpozná texty, pri každom predvolí čo to je a ty len potvrdíš/opravíš.</div>
+    ${ex}
+    <h4 style="margin:14px 0 6px">Rýchla tabuľka — formáty tracking čísel</h4>
+    <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th>Prepravca</th><th>Tracking (skenuj)</th><th>Iné kódy na štítku</th></tr></thead><tbody>${fmt}</tbody></table></div>
+    <div style="text-align:right;margin-top:12px"><button class="btn" style="width:auto" onclick="closeModal()">Zavrieť</button></div>`);
 }
 // okno prepravcov — posledná automatická synchronizácia stavov cez API
 const CARRIERS=[{code:"UPS",fn:"ups-refresh-all",live:true},{code:"FedEx",live:true},{code:"GLS",live:true},{code:"DHL Express",live:true},{code:"DHL Freight",live:false},{code:"Packeta",live:false}];
@@ -2121,10 +2186,6 @@ async function shipLabelRecognize(){
         const det=(data&&data.error)||(error&&(error.message||error.name))||"funkcia možno nie je nasadená";
         if(box)box.innerHTML=`<div class="msg err">Rozpoznávanie zlyhalo: ${esc(String(det))}<br><span class="muted">Skontroluj: funkcia <b>identify-labels</b> je nasadená a je nastavený <b>ANTHROPIC_API_KEY</b>.</span></div>`;return;}
       shipLastLabels=data;
-      const set=(id,v)=>{const el=$("#"+id);if(el&&v&&!el.value)el.value=v;};
-      set("s_trk",data.tracking_number);set("s_carr",data.carrier);set("s_inv",data.invoice_number);set("s_order",data.order_number);
-      set("s_awb",data.awb);set("s_jds",data.customs_doc);
-      if((data.awb||data.customs_doc)&&$("#s_customs")&&!$("#s_customs").checked)$("#s_customs").checked=true;
       // párovanie produktu: podľa EAN, inak podľa názvu/modelu; inak ponúkni vytvorenie z rozpoznaných údajov
       const norm=s=>String(s||"").replace(/\s/g,"").toLowerCase();
       const pm=(data.product&&(data.product.model||data.product.name))||"";
@@ -2136,11 +2197,49 @@ async function shipLabelRecognize(){
         itemMsg=`✓ Produkt „${esc(prod.name)}" pridaný do zásielky${data.serial?" · SN "+esc(data.serial):""}.`;}
       else if(pm||data.ean){itemMsg=`Produkt ${pm?"„"+esc(pm)+"“":"(EAN "+esc(data.ean)+")"} nie je v katalógu — <button class="btn green sm" type="button" onclick="shipCreateProductFromLabel()">➕ Vytvoriť a pridať (aj s parametrami)</button>`;}
       else if(data.serial){shipPendingSerial=data.serial;itemMsg=`SN produktu: <b>${esc(data.serial)}</b> — vyber produkt nižšie, sériové číslo sa pridá automaticky.`;}
-      const specN=data.specs?Object.keys(data.specs).length:0;
-      const extra=[data.awb?"AWB: "+esc(data.awb):"",data.customs_doc?"colné (JDS/MRN): "+esc(data.customs_doc):"",data.invoice_number?"faktúra: "+esc(data.invoice_number):"",data.order_number?"obj.: "+esc(data.order_number):"",specN?("parametre: "+specN):"",(data.references&&data.references.length)?"ďalšie: "+esc(data.references.join(", ")):""].filter(Boolean).join(" · ");
-      if(box)box.innerHTML=`<div class="msg ok">✓ Rozpoznané${data.tracking_number?" · tracking <b>"+esc(data.tracking_number)+"</b>":""}${data.carrier?" ("+esc(data.carrier)+")":""}${extra?"<br>"+extra:""}${itemMsg?"<br>"+itemMsg:""}${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;
+      shipBuildReview(data,itemMsg);
       shipLabelPhotos=[];renderLabelTray();
     }catch(e){if(box)box.innerHTML=`<div class="msg err">Chyba: ${esc((e&&e.message)||String(e))}</div>`;}
+}
+// typy rozpoznaného textu (na výber v potvrdzovacom paneli)
+const LBL_TYPES=[["tracking","Tracking (sledovacie číslo)"],["carrier","Prepravca"],["awb","AWB (letecký list)"],["customs","Colný doklad (JDS/MRN)"],["invoice","Faktúra / doklad"],["order","Objednávka"],["serial","Sériové číslo (SN)"],["ean","EAN / čiarový kód"],["reference","Referencia (iné)"],["ignore","Ignorovať"]];
+// z výsledku AI zostaví riadky (hodnota + predvolený typ) na kontrolu používateľom
+function shipBuildReview(data,itemMsg){
+  const box=$("#s_trkmsg");if(!box)return;
+  const rows=[];const add=(v,t)=>{v=(v||"").toString().trim();if(v)rows.push({v,t});};
+  add(data.tracking_number,"tracking");add(data.carrier,"carrier");add(data.awb,"awb");add(data.customs_doc,"customs");
+  add(data.invoice_number,"invoice");add(data.order_number,"order");add(data.serial,"serial");add(data.ean,"ean");
+  (Array.isArray(data.references)?data.references:[]).forEach(r=>add(r,"reference"));
+  if(!rows.length){box.innerHTML=`<div class="msg">Na fotke sa nenašli žiadne kódy. Skús ostrejšiu/otočenú fotku.${data.notes?`<br><span class="muted">${esc(data.notes)}</span>`:""}</div>`;return;}
+  const sel=t=>`<select class="lblrt" style="font-size:12px;padding:2px 4px">${LBL_TYPES.map(([k,l])=>`<option value="${k}" ${k===t?"selected":""}>${esc(l)}</option>`).join("")}</select>`;
+  const trs=rows.map(r=>`<tr><td style="padding:3px 6px"><input class="lblrv" value="${esc(r.v)}" style="width:100%;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:3px 6px"></td><td style="padding:3px 6px">${sel(r.t)}</td></tr>`).join("");
+  box.innerHTML=`<div class="msg" style="background:var(--acc-soft);color:#8a4e14">
+    <b>✓ Rozpoznané${data.carrier?" ("+esc(data.carrier)+")":""} — skontroluj čo je čo a klikni „Použiť":</b>
+    <table class="ptbl" style="margin-top:6px;font-size:12px;background:var(--card)"><thead><tr><th>Text</th><th style="width:180px">Čo to je</th></tr></thead><tbody>${trs}</tbody></table>
+    <div class="inline" style="gap:6px;margin-top:8px"><button class="btn green sm" type="button" onclick="shipLabelApply()">✓ Použiť do formulára</button>
+    ${shipLastLabels&&(shipLastLabels.product&&(shipLastLabels.product.model||shipLastLabels.product.name)||shipLastLabels.ean)&&!shipItems.length?`<button class="btn sm" type="button" onclick="shipCreateProductFromLabel()">➕ Vytvoriť produkt z fotky</button>`:""}</div>
+    ${itemMsg?`<div style="margin-top:6px">${itemMsg}</div>`:""}${data.notes?`<div class="muted" style="margin-top:4px">${esc(data.notes)}</div>`:""}</div>`;
+}
+// prenesie potvrdené hodnoty do polí formulára zásielky
+function shipLabelApply(){
+  const box=$("#s_trkmsg");
+  const vs=[...document.querySelectorAll(".lblrv")].map(e=>e.value.trim());
+  const ts=[...document.querySelectorAll(".lblrt")].map(e=>e.value);
+  const setv=(id,v)=>{const el=$("#"+id);if(el&&v)el.value=v;};
+  let customs=false,refs=[];const done=[];
+  vs.forEach((v,i)=>{if(!v)return;const t=ts[i];
+    if(t==="tracking"){setv("s_trk",v);done.push("tracking");}
+    else if(t==="carrier"){setv("s_carr",v);done.push("prepravca");}
+    else if(t==="awb"){setv("s_awb",v);customs=true;done.push("AWB");}
+    else if(t==="customs"){setv("s_jds",v);customs=true;done.push("colné");}
+    else if(t==="invoice"){setv("s_inv",v);done.push("faktúra");}
+    else if(t==="order"){setv("s_order",v);done.push("objednávka");}
+    else if(t==="serial"){shipPendingSerial=v;done.push("SN");}
+    else if(t==="ean"){done.push("EAN");}
+    else if(t==="reference"){refs.push(v);}});
+  if(customs&&$("#s_customs")&&!$("#s_customs").checked)$("#s_customs").checked=true;
+  if(!$("#s_carr").value)shipAutoCarrier();
+  if(box)box.innerHTML=`<div class="msg ok">✓ Prenesené do formulára${done.length?": "+esc(done.join(", ")):""}.${refs.length?`<br><span class="muted">Referencie (neuložené do polí): ${esc(refs.join(", "))}</span>`:""}${shipPendingSerial?`<br><span class="muted">SN <b>${esc(shipPendingSerial)}</b> sa pripne k položke, ktorú vyberieš nižšie.</span>`:""}</div>`;
 }
 // pri písaní tracking čísla sám rozpozná a predvyplní prepravcu (kým ho user nevyplní ručne)
 function shipAutoCarrier(){const c=$("#s_carr");if(c&&!c.value.trim()){const n=detectCarrierName("",$("#s_trk").value);if(n)c.value=n;}}
