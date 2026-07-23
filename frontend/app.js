@@ -2002,44 +2002,70 @@ const LABEL_TAGS={
   route:{t:"smerovanie — nie tracking",c:"#c14740",bg:"#f7e6e4"},
   info:{t:"info",c:"#8a8178",bg:"#efe9dd"}};
 function labelTag(k){const x=LABEL_TAGS[k];return x?`<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;background:${x.bg};color:${x.c};margin-left:4px;white-space:nowrap">${esc(x.t)}</span>`:"";}
-// každý riadok: [text na štítku, čo to je, tag]
+// každý príklad: zones = zóny na schematickom štítku (bublina = poradie), items = vysvetlenie (rovnaké poradie)
 const LABEL_EXAMPLES=[
   {name:"DHL Express",bg:"#d40511",fg:"#ffcc00",note:"Reálny štítok z HK → Praha (Computer Fan).",
-   rows:[
-    ["DHL (žlto-červené logo)","Prepravca","info"],
-    ["EXPRESS WORLDWIDE · WPX","Produkt/služba (WPX = Worldwide Parcel Express)","info"],
-    ["Origin: HKG","Pôvod — letiskový kód (Hongkong)","route"],
-    ["From: DONGGUAN YIHW… HONG KONG","Odosielateľ","info"],
-    ["To: KENTINO S.R.O. TAX NO. CZ05066743…","Príjemca + DIČ","info"],
-    ["CZ-PRG-GTW  3X68","Smerový/triediaci kód (Česko-Praha-gateway)","route"],
-    ["Pce/Shpt Weight: 10.5/54.3 kg","Hmotnosť kusu / celej zásielky","info"],
-    ["Piece: 2/6","Poradie kusu (2. zo 6)","route"],
-    ["Ref No: DL-6638699686","Referencia odosielateľa","ref"],
-    ["Content: Computer Fan","Obsah","info"],
-    ["WAYBILL  83 1798 8302","Tracking (waybill) — 10 číslic: 8317988302","scan"],
-    ["(2L)CZ10100+48000001","Routing barcode (PSČ CZ 10100)","route"],
-    ["(J) JD01 4600 0127…","Piece-ID / „license plate\" barcode kusu","route"]]},
+   zones:[
+    [`<b style="color:#d40511;font-style:italic;font-size:15px">DHL</b> <span style="font-weight:700;font-size:9px">EXPRESS WORLDWIDE · WPX</span><span style="float:right;font-weight:700">HKG</span>`,""],
+    [`From: DONGGUAN YIHW NEW MATERIAL… HONG KONG`,"font-size:9px"],
+    [`<b>To:</b> KENTINO S.R.O. · TAX CZ05066743 · 10100 PRAHA`,"font-size:9px"],
+    [`<b style="font-size:14px;letter-spacing:1px">CZ-PRG-GTW 3X68</b>`,"text-align:center"],
+    [`10.5/54.3 kg<span style="float:right">Piece 2/6</span>`,"font-size:9px"],
+    [`Ref No: DL-6638699686 · Computer Fan`,"font-size:9px"],
+    [`<div style="font-size:8px">WAYBILL 83 1798 8302</div><div class="bc t"></div>`,"text-align:center"],
+    [`<div style="display:flex;gap:6px"><div class="bc" style="flex:1"></div><div class="bc" style="flex:1"></div></div>`,""]],
+   items:[
+    ["Logo + služba","EXPRESS WORLDWIDE / WPX · Origin HKG (letiskový kód)","info"],
+    ["Odosielateľ (From)","kto posiela","info"],
+    ["Príjemca (To) + DIČ","komu · daňové číslo","info"],
+    ["CZ-PRG-GTW 3X68","smerový/triediaci kód (Česko-Praha-gateway)","route"],
+    ["Hmotnosť + poradie kusu","kus/zásielka 10.5/54.3 kg · Piece 2/6","route"],
+    ["Ref No + obsah","referencia odosielateľa · Computer Fan","ref"],
+    ["WAYBILL — tracking","10 číslic: 8317988302","scan"],
+    ["Routing + Piece-ID barcody","(2L)…PSČ · (J)JD01… kus — pre triedenie","route"]]},
   {name:"UPS",bg:"#5a3410",fg:"#fff",note:"Reálny štítok z Talianska → Praha (UPS Standard).",
-   rows:[
-    ["UPS (logo)","Prepravca","info"],
-    ["MaxiCode (okrúhly 2D kód s terčíkom)","Smerovanie a triedenie v sieti UPS (PSČ, krajina, služba) — NIE tracking","route"],
-    ["SHIP TO: MIZIK VASEK… 10100 PRAHA","Príjemca","info"],
-    ["CZE 582 2-11","Routing code — cieľové PSČ/triediace stredisko","route"],
-    ["UPS STANDARD","Druh služby","info"],
-    ["TRACKING #: 1Z V8K 534 68 3770 5525","Tracking — 1Z + 16 znakov (18 spolu)","scan"],
-    ["SHP#: V8K5 34FC LSC","Interné číslo zásielky odosielateľa","ref"],
-    ["SHP WT / DWT / DATE","Hmotnosť a dátum podania","info"],
-    ["1 OF 2","Poradie kusu (1. z 2)","route"]]}];
+   zones:[
+    [`<div class="maxi"></div>`,"text-align:center"],
+    [`<span style="font-size:8px">SHIP TO:</span><br><b>MIZIK VASEK</b> · 10100 PRAHA`,"font-size:9px"],
+    [`<b style="font-size:13px;letter-spacing:1px">CZE 582 2-11</b>`,"text-align:center"],
+    [`<span style="background:#111;color:#fff;font-weight:800;padding:2px 6px">UPS STANDARD</span>`,""],
+    [`<div style="font-size:8px">TRACKING #: 1Z V8K 534 68 3770 5525</div><div class="bc t"></div>`,"text-align:center"],
+    [`SHP#: V8K5 34FC LSC`,"font-size:9px"],
+    [`SHP WT 37 KG · DATE 17 JUL 2026`,"font-size:9px"],
+    [`1 OF 2`,"font-size:9px"]],
+   items:[
+    ["MaxiCode (okrúhly 2D kód)","smerovanie a triedenie (PSČ, krajina, služba) — NIE tracking","route"],
+    ["Príjemca (Ship To)","komu","info"],
+    ["CZE 582 2-11","routing code — cieľové PSČ / triediace stredisko","route"],
+    ["UPS STANDARD","druh služby","info"],
+    ["TRACKING # 1Z…","tracking — 1Z + 16 znakov (18 spolu)","scan"],
+    ["SHP#","interné číslo zásielky odosielateľa","ref"],
+    ["Hmotnosť + dátum","váha a dátum podania","info"],
+    ["1 OF 2","poradie kusu (1. z 2)","route"]]}];
 function shipLabelGuide(){
   const legend=Object.values(LABEL_TAGS).filter((x,i)=>i<4).map(x=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:${x.bg};color:${x.c}"><span style="width:9px;height:9px;border-radius:50%;background:${x.c}"></span>${esc(x.t)}</span>`).join("");
-  const ex=LABEL_EXAMPLES.map(e=>`
-    <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--card)">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+  const css=`<style>
+    .slbl{position:relative;width:280px;max-width:100%;background:#fff;color:#111;border:1px solid #bbb;border-radius:4px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;font-size:10px;flex:0 0 280px}
+    .slbl .z{border-bottom:1.5px solid #111;padding:5px 7px 5px 27px;position:relative;min-height:18px}
+    .slbl .z:last-child{border-bottom:0}
+    .slbl .slbadge{position:absolute;left:4px;top:4px;width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff;z-index:2}
+    .slbl .bc{height:22px;background:repeating-linear-gradient(90deg,#111 0 1px,#fff 1px 2px,#111 2px 4px,#fff 4px 5px,#111 5px 7px,#fff 7px 8px)}
+    .slbl .bc.t{height:38px}
+    .slbl .maxi{width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#111 0 2px,#fff 2px 4px,#111 4px 6px,#fff 6px 8px,#111 8px 10px,transparent 10px),#fff;border:1px solid #111;margin:2px auto;display:inline-block}
+    .slkeys{flex:1;min-width:220px;display:flex;flex-direction:column;gap:7px}
+    .slkey{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+    .slkey .kn{flex:0 0 18px;width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:1px}
+    .slkey .kmn{color:var(--muted-tx,#8a8178);font-size:12px}
+    .slwrap{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  </style>`;
+  const ex=LABEL_EXAMPLES.map(e=>{
+    const mock=`<div class="slbl">${e.zones.map((z,i)=>`<div class="z"${z[1]?` style="${z[1]}"`:""}><span class="slbadge">${i+1}</span>${z[0]}</div>`).join("")}</div>`;
+    const keys=`<div class="slkeys">${e.items.map((it,i)=>`<div class="slkey"><span class="kn">${i+1}</span><div><b>${esc(it[0])}</b>${it[1]?` — <span class="kmn">${esc(it[1])}</span>`:""}${labelTag(it[2])}</div></div>`).join("")}</div>`;
+    return `<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--card)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <span style="width:46px;height:30px;border-radius:6px;background:${e.bg};color:${e.fg};font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 46px">${esc(e.name.split(" ")[0])}</span>
         <b style="font-size:15px">${esc(e.name)}</b><span class="muted" style="font-size:12px">${esc(e.note)}</span></div>
-      <table class="ptbl" style="font-size:13px"><thead><tr><th style="width:44%">Text na štítku</th><th>Čo to je</th></tr></thead><tbody>
-      ${e.rows.map(r=>`<tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(r[0])}</td><td>${esc(r[1])}${labelTag(r[2])}</td></tr>`).join("")}
-      </tbody></table></div>`).join("");
+      <div class="slwrap">${mock}${keys}</div></div>`;}).join("");
   const fmt=[["UPS","1Z + 16 znakov (18 spolu)","Reference No. · MaxiCode (smerovanie)"],
     ["FedEx","12 číslic (až 14/15)","Door tag DT+12 · Form ID"],
     ["DHL Express","10 číslic pri „WAYBILL\" / JJD, JVGL, JD…","AWB XXX-XXXXXXXX · smerový kód (napr. CZ-PRG-GTW)"],
@@ -2049,7 +2075,7 @@ function shipLabelGuide(){
     ["Balíkovna","DR…C","—"],
     ["Letecký AWB","XXX-XXXXXXXX (11 číslic)","3-cifra letecká predpona + 7 + kontrola · pre colné"]]
     .map(r=>`<tr><td><b>${esc(r[0])}</b></td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(r[1])}</td><td class="muted" style="font-size:12px">${esc(r[2])}</td></tr>`).join("");
-  openModal(`<div style="display:flex;justify-content:space-between;align-items:center"><h2>Anatómia prepravného štítku — čo je čo</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
+  openModal(`${css}<div style="display:flex;justify-content:space-between;align-items:center"><h2>Anatómia prepravného štítku — čo je čo</h2><button class="btn ghost sm" onclick="closeModal()">✕</button></div>
     <div class="muted" style="margin-bottom:8px">Rozpis polí na reálnych štítkoch. Ktorý kód je <b>tracking</b>, ktorý <b>AWB</b>, čo je len <b>referencia</b> a čo <b>smerovanie</b> (neskenovať ako tracking).</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${legend}</div>
     <div class="msg" style="background:var(--acc-soft);color:#8a4e14;margin-bottom:12px">📷 <b>V appke:</b> pri novej zásielke odfoť štítok (📷 Odfotiť štítok) — appka rozpozná texty, pri každom predvolí čo to je a ty len potvrdíš/opravíš.</div>
