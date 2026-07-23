@@ -89,7 +89,9 @@ Deno.serve(async (req) => {
     }));
     const cur = pkg.currentStatus || pkg.activity?.[0]?.status || {};
     const status = cur.description || "";
-    const delivered = /deliver/i.test((cur.type || "") + status);
+    // POZOR: "Out for Delivery" obsahuje "Delivery" — nesmie sa počítať ako doručené.
+    // Doručené = stavový typ "D" (Delivered) alebo popis obsahujúci slovo "delivered".
+    const delivered = (cur.type || "").toUpperCase() === "D" || /\bdelivered\b/i.test(status);
     // dátumy: doručenie / plánované
     const dArr = pkg.deliveryDate || shipment?.deliveryDate || [];
     const del = dArr.find((x: any) => /DEL/i.test(x.type || "")) || dArr[0];
