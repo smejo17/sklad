@@ -53,6 +53,11 @@ async function getToken(): Promise<string> {
     // ak to nie je problém prostredia, nemá zmysel skúšať druhé
     if (!/sandbox|production|environment|not allowed/i.test(lastMsg)) break;
   }
+  // časté nedorozumenie: nastavené sú TESTOVACIE (sandbox) kľúče, ale sledujeme reálne zásielky (produkcia)
+  if (/sandbox credentials not allowed/i.test(lastMsg))
+    lastMsg += " — Máš nastavené TESTOVACIE (Test Key) kľúče. Na sledovanie reálnych zásielok treba PRODUKČNÉ kľúče z developer.fedex.com (projekt → Production → API Key + Secret).";
+  else if (/production credentials not allowed/i.test(lastMsg))
+    lastMsg += " — Produkčné kľúče idú na testovací endpoint. Odstráň secret FEDEX_ENV (alebo nastav FEDEX_ENV=prod).";
   throw new Error("FedEx OAuth chyba: " + lastMsg);
 }
 function iso(s?: string) { return s ? String(s).replace("T", " ").slice(0, 16) : ""; }
